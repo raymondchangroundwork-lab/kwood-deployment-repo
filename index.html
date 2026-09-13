@@ -5504,17 +5504,41 @@ function renderQuote(){
         ${$('stdNotesText').value.replace(/\n/g,'<br>')}
       </div>`);
   }
-  if (customerPurchaseItems.length){
-    page1Blocks.push(`
-      <div class="doc-notes">
-        <div class="h">Customer-purchased items (reference only — not included in this quote)</div>
-        <ul style="margin:4px 0 0; padding-left:18px;">
-          ${customerPurchaseItems.map(r => `<li>${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''} — ${(r.category||'').replace(/</g,'&lt;')}${r.notes ? ' (' + r.notes.replace(/</g,'&lt;') + ')' : ''}</li>`).join('')}
-        </ul>
-      </div>`);
-  }
   page1Blocks.push(signBlock);
   blockGroups.push({ forceNewPage: false, blocks: page1Blocks, headerHtml: docHeadBlock });
+
+  // Customer-purchased items get their own page, grouped by zone (like Summary by area) so the
+  // client can see at a glance what they still need to buy for each room — never priced.
+  if (customerPurchaseItems.length){
+    const cpByZone = {};
+    const cpZoneOrder = [];
+    customerPurchaseItems.forEach(r => {
+      const zone = r.category || 'Other';
+      if (!(zone in cpByZone)){ cpByZone[zone] = []; cpZoneOrder.push(zone); }
+      cpByZone[zone].push(r);
+    });
+    const cpBlocks = [
+      `<div class="render-page-title">Customer-purchased items — by zone</div>`,
+      `<div class="doc-notes" style="margin-top:0;">Reference only — the client is sourcing these on their own; not included in this quote's pricing.</div>`
+    ];
+    cpZoneOrder.forEach((zone, zi) => {
+      const areaNum = String(zi + 1).padStart(2, '0');
+      const rows = cpByZone[zone];
+      cpBlocks.push(`
+        <div class="zone-summary" style="margin-top:14px;">
+          <div class="zone-block">
+            <div class="zs-row">
+              <span class="zs-name">${areaNum} — ${zone.replace(/</g,'&lt;')}</span>
+              <span class="zs-amt">${rows.length} item${rows.length > 1 ? 's' : ''}</span>
+            </div>
+            <ul class="zs-bullets">
+              ${rows.map(r => `<li>${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}${r.notes ? ' — ' + r.notes.replace(/</g,'&lt;') : ''}</li>`).join('')}
+            </ul>
+          </div>
+        </div>`);
+    });
+    blockGroups.push({ forceNewPage: true, blocks: cpBlocks, headerHtml: docHeadBlock });
+  }
 
   const page2Blocks = [];
   if (paymentPhases.length){
