@@ -24,3 +24,7 @@ build/
 # Logs
 *.log
 npm-debug.log*
+
+# Architecture/internal docs — must stay in private source repo only
+Cloudflare_Invite_Only_Architecture_Plan.md
+*.plan.md
