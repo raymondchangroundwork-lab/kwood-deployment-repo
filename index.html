@@ -1067,7 +1067,11 @@
 
       <div class="section">
         <div class="section-head"><h2 data-i18n="sec_adjust">Adjustments &amp; terms</h2><span class="section-num">04</span></div>
-        <div class="grid2">
+        <div class="grid3">
+          <div>
+            <label data-i18n="markup_pct">Price up (%)</label>
+            <input id="markupPct" type="number" min="0" step="0.1" value="0" oninput="renderQuote()">
+          </div>
           <div>
             <label data-i18n="discount_pct">Discount (%)</label>
             <input id="discountPct" type="number" min="0" step="0.1" value="0" oninput="renderQuote()">
@@ -2411,6 +2415,7 @@ const translations = {
   how_hear: { en: "How did you hear about us?", zh: "您是如何得知我們的？" },
   image_name: { en: "Image name", zh: "圖片名稱" },
   item: { en: "Item", zh: "項目" },
+  markup_pct: { en: "Price up (%)", zh: "加價 (%)" },
   month: { en: "Month", zh: "月份" },
   notes_finish: { en: "Notes (optional — e.g. finish colour, hardware)", zh: "備註（選填 — 例如顏色、五金）" },
   notes_optional: { en: "Notes (optional)", zh: "備註（選填）" },
@@ -3082,9 +3087,11 @@ async function deleteUser(username){
 function buildQuoteRecord(){
   const voSign = (docType === 'vo' && voDirection === 'deducting') ? -1 : 1;
   const subtotal = items.reduce((s,i)=>s+i.total,0) * voSign;
+  const markupPct = parseFloat($('markupPct').value) || 0;
   const discountPct = parseFloat($('discountPct').value) || 0;
   const taxPct = parseFloat($('taxPct').value) || 0;
-  const afterDiscount = subtotal - subtotal * (discountPct/100);
+  const afterMarkup = subtotal + subtotal * (markupPct/100);
+  const afterDiscount = afterMarkup - afterMarkup * (discountPct/100);
   const grandTotal = afterDiscount + afterDiscount * (taxPct/100);
 
   return {
@@ -3110,6 +3117,7 @@ function buildQuoteRecord(){
     expectedStartDate: $('expectedStartDate').value,
     items: items,
     itemSeq: itemSeq,
+    markupPct: markupPct,
     discountPct: discountPct,
     taxPct: taxPct,
     paymentTerms: paymentPhases,
@@ -3871,6 +3879,7 @@ async function openQuote(id){
   setRoundDirection(q.roundDirection || 'none');
   renderProjectImagesList();
   $('expectedStartDate').value = q.expectedStartDate || '';
+  $('markupPct').value = q.markupPct || 0;
   $('discountPct').value = q.discountPct || 0;
   $('taxPct').value = q.taxPct != null ? q.taxPct : 13;
   paymentPhases = (q.paymentTerms && q.paymentTerms.length) ? q.paymentTerms : defaultPaymentPhases();
@@ -3929,6 +3938,7 @@ async function createVariationOrder(parentId){
   $('clientEmail').value = parent.clientEmail || '';
   $('clientAddress').value = parent.clientAddress || '';
   $('leadSource').value = parent.leadSource || 'Google Search';
+  $('markupPct').value = 0;
   $('discountPct').value = 0;
   $('taxPct').value = parent.taxPct != null ? parent.taxPct : 13;
   $('cabZone').value = '';
@@ -5130,10 +5140,13 @@ function renderQuote(){
 
   const voSign = (docType === 'vo' && voDirection === 'deducting') ? -1 : 1;
   const subtotal = items.reduce((s,i)=>s+i.total,0) * voSign;
+  const markupPct = parseFloat($('markupPct').value) || 0;
   const discountPct = parseFloat($('discountPct').value) || 0;
   const taxPct = parseFloat($('taxPct').value) || 0;
-  const discountAmt = subtotal * (discountPct/100);
-  const afterDiscount = subtotal - discountAmt;
+  const markupAmt = subtotal * (markupPct/100);
+  const afterMarkup = subtotal + markupAmt;
+  const discountAmt = afterMarkup * (discountPct/100);
+  const afterDiscount = afterMarkup - discountAmt;
   const taxAmt = afterDiscount * (taxPct/100);
   const rawGrandTotal = afterDiscount + taxAmt;
 
@@ -5328,6 +5341,7 @@ function renderQuote(){
   page3Blocks.push(`
     <div class="doc-totals">
       <div class="row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
+      ${markupPct > 0 ? `<div class="row"><span>Price up (${markupPct}%)</span><span>${money(markupAmt)}</span></div>` : ''}
       ${discountPct > 0 ? `<div class="row"><span>Discount (${discountPct}%)</span><span>${money(-discountAmt)}</span></div>` : ''}
       <div class="row"><span>Tax / HST (${taxPct}%)</span><span>${money(taxAmt)}</span></div>
       ${roundingAdjustment !== 0 ? `<div class="row"><span>Rounding adjustment</span><span>${money(roundingAdjustment)}</span></div>` : ''}
@@ -5461,6 +5475,7 @@ async function resetQuote(silent){
   currentDocStatus = 'draft';
   $('quoteDate').value = todayISO(0);
   $('quoteValid').value = todayISO(30);
+  $('markupPct').value = 0;
   $('discountPct').value = 0;
   $('taxPct').value = 13;
   $('termsNotes').value = '50% deposit due upon signed acceptance, balance due upon completion. Quote valid for 30 days. Measurements are estimates until final site verification.';
