@@ -1,0 +1,13 @@
+﻿{
+  "name": "kwood-quotation-builder",
+  "version": "1.0.0",
+  "description": "K-Wood Kitchens Quotation Builder — local system",
+  "private": true,
+  "scripts": {
+    "start": "npm start --prefix server",
+    "dev": "npm run dev --prefix server",
+    "test": "npm test --prefix server",
+    "create-admin": "npm run create-admin --prefix server",
+    "backup": "npm run backup --prefix server"
+  }
+}
