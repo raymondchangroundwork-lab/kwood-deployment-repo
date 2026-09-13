@@ -817,15 +817,15 @@
         <div class="grid3">
           <div>
             <label data-i18n="quote_num">Quote #</label>
-            <input id="quoteNum" value="">
+            <input id="quoteNum" value="" oninput="renderQuote()">
           </div>
           <div>
             <label data-i18n="date_issued">Date issued</label>
-            <input id="quoteDate" type="date">
+            <input id="quoteDate" type="date" onchange="renderQuote()">
           </div>
           <div>
             <label data-i18n="valid_until">Valid until</label>
-            <input id="quoteValid" type="date">
+            <input id="quoteValid" type="date" onchange="renderQuote()">
           </div>
         </div>
         <div class="grid2">
@@ -836,27 +836,27 @@
           </div>
           <div>
             <label data-i18n="client_name">Client name</label>
-            <input id="clientName" placeholder="e.g. John &amp; Diane Reyes" data-i18n-ph="ph_client_name">
+            <input id="clientName" placeholder="e.g. John &amp; Diane Reyes" data-i18n-ph="ph_client_name" oninput="renderQuote()">
           </div>
         </div>
         <div class="grid2">
           <div>
             <label data-i18n="client_phone">Client phone</label>
-            <input id="clientPhone" type="tel" placeholder="e.g. (604) 555-0132" data-i18n-ph="ph_phone">
+            <input id="clientPhone" type="tel" placeholder="e.g. (604) 555-0132" data-i18n-ph="ph_phone" oninput="renderQuote()">
           </div>
           <div>
             <label data-i18n="client_email">Client email</label>
-            <input id="clientEmail" type="email" placeholder="e.g. jdreyes@email.com" data-i18n-ph="ph_email">
+            <input id="clientEmail" type="email" placeholder="e.g. jdreyes@email.com" data-i18n-ph="ph_email" oninput="renderQuote()">
           </div>
         </div>
         <div class="grid2">
           <div>
             <label data-i18n="project_address">Project address</label>
-            <input id="clientAddress" placeholder="e.g. 12 Birchwood Ave, Vancouver" data-i18n-ph="ph_address">
+            <input id="clientAddress" placeholder="e.g. 12 Birchwood Ave, Vancouver" data-i18n-ph="ph_address" oninput="renderQuote()">
           </div>
           <div>
             <label data-i18n="client_lead_source">Client lead source</label>
-            <select id="leadSource">
+            <select id="leadSource" onchange="renderQuote()">
               <option>Google Search</option>
               <option>HomeStars</option>
               <option data-i18n="opt_referral">Client Referral</option>
@@ -869,7 +869,7 @@
         <div class="grid2">
           <div>
             <label data-i18n="unit_type">Unit type</label>
-            <select id="unitType">
+            <select id="unitType" onchange="renderQuote()">
               <option value="">—</option>
               <option data-i18n="opt_condo">Condo</option>
               <option data-i18n="opt_apartment">Apartment</option>
@@ -880,7 +880,7 @@
           </div>
           <div>
             <label data-i18n="expected_start">Expected starting date</label>
-            <input id="expectedStartDate" type="date">
+            <input id="expectedStartDate" type="date" onchange="renderQuote()">
           </div>
         </div>
       </div>
@@ -3011,11 +3011,13 @@ function addCustomerPurchaseItem(){
   $('cpDeliverDate').value = '';
   $('cpDeliverTo').value = 'site';
   renderCustomerPurchaseList();
+  renderQuote();
 }
 
 function removeCustomerPurchaseItem(idx){
   customerPurchaseItems.splice(idx, 1);
   renderCustomerPurchaseList();
+  renderQuote();
 }
 
 function cpFmtDate(s){
