@@ -775,6 +775,7 @@
     <div class="nav-tabs" id="navTabs">
       <div class="nav-tab active" data-view="builder" onclick="setView('builder')" data-i18n="nav_builder">Quote Builder</div>
       <div class="nav-tab" data-view="myquotes" onclick="setView('myquotes')" data-i18n="nav_myquotes">My Quotes</div>
+      <div class="nav-tab" data-view="appliances" onclick="setView('appliances')" data-i18n="nav_appliances">Appliances/Customer purchase</div>
       <div class="nav-tab" data-view="admin" id="navAdminTab" style="display:none;" onclick="setView('admin')" data-i18n="nav_admin">Admin</div>
     </div>
     <div class="topbar-actions">
@@ -899,7 +900,6 @@
         <div class="toggle-row">
           <div class="toggle-btn active" id="tabCabinet" onclick="setItemType('cabinet')" data-i18n="tab_cabinet">Cabinetry</div>
           <div class="toggle-btn" id="tabTrade" onclick="setItemType('trade')" data-i18n="tab_trade">Renovation &amp; trades</div>
-          <div class="toggle-btn" id="tabAppliance" onclick="setItemType('appliance')" data-i18n="tab_appliance">Appliances</div>
         </div>
 
         <div class="quote-progress" id="quoteProgress" data-i18n="quote_progress_hint">No items yet — fill in the form below, then click <strong>+ Add item</strong>. You can add as many items as you need; each one stacks into the same quotation.</div>
@@ -1014,11 +1014,6 @@
           </div>
           <div class="add-row"><button class="btn btn-dark" onclick="addTradeItem()" data-i18n="btn_add_item">+ Add item</button></div>
         </div>
-
-        <!-- APPLIANCES FORM — no catalog of its own; it's just a home for the shared custom item
-             box below, so one-off appliance lines (fridge, range, dishwasher, etc.) group under
-             their own "Appliances" section instead of Cabinetry or Custom / Other. -->
-        <div id="applianceForm" style="display:none;"></div>
 
         <!-- CUSTOM ITEM BOX — a single shared block, moved by JS into whichever tab (Cabinetry / Renovation & trades) is active,
              so a custom item added here is tagged as belonging to that section. -->
@@ -1269,6 +1264,46 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
     </div>
   </div>
 
+  <!-- ================= APPLIANCES / CUSTOMER PURCHASE VIEW ================= -->
+  <div class="full-panel" id="appliancesView" style="display:none;">
+    <div class="panel-head">
+      <h2 data-i18n="appliances_page_title">Appliances / Customer purchase items</h2>
+    </div>
+    <div class="sub" data-i18n="appliances_page_hint">
+      Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range,
+      fridge, faucets). This list is for reference only — it does not affect this quote's pricing.
+    </div>
+    <div class="sub" id="appliancesQuoteContext" style="margin-top:6px; font-weight:600;"></div>
+
+    <div class="section" style="margin-top:16px; padding-top:16px;">
+      <div class="grid3">
+        <div>
+          <label data-i18n="category">Category</label>
+          <select id="cpCategory" onchange="populateCpItems()"></select>
+        </div>
+        <div>
+          <label data-i18n="item">Item</label>
+          <select id="cpItem"></select>
+        </div>
+        <div>
+          <label data-i18n="quantity">Quantity</label>
+          <input id="cpQty" type="number" min="1" step="1" value="1">
+        </div>
+      </div>
+      <label data-i18n="notes_optional">Notes (optional)</label>
+      <input id="cpNotes" placeholder="e.g. brand/model to be confirmed by client" data-i18n-ph="ph_cp_notes">
+      <div class="add-row"><button class="btn btn-dark" onclick="addCustomerPurchaseItem()" data-i18n="cp_add">+ Add to list</button></div>
+    </div>
+
+    <div class="items-list" id="cpItemsList" style="margin-top:18px;"></div>
+
+    <div class="add-row" style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveQuoteFromAppliancesPage()" data-i18n="btn_save">Save quote</button>
+      <span class="sub" data-i18n="cp_save_hint" style="margin-left:10px;">Saves with the rest of this quote.</span>
+    </div>
+    <div id="cpSaveStatus" style="font-size:11.5px; margin-top:8px; display:none;"></div>
+  </div>
+
   <!-- ================= ADMIN VIEW ================= -->
   <div class="full-panel" id="adminView" style="display:none;">
     <div class="panel-head"><h2 data-i18n="admin_title">Admin</h2></div>
@@ -1288,6 +1323,7 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
         <div class="sub-tabs" id="pricingSubTabs" style="margin-top:16px;">
           <div class="sub-tab active" data-pricingtab="cabinetry" onclick="setPricingSubTab('cabinetry')" data-i18n="tab_cabinet">Cabinetry</div>
           <div class="sub-tab" data-pricingtab="trades" onclick="setPricingSubTab('trades')" data-i18n="admin_trades_tab">Renovation &amp; Trades</div>
+          <div class="sub-tab" data-pricingtab="appliances" onclick="setPricingSubTab('appliances')" data-i18n="nav_appliances">Appliances/Customer purchase</div>
         </div>
 
         <div id="pricingCabinetrySection">
@@ -1307,6 +1343,12 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
           <div class="sub" style="margin-bottom:8px;" data-i18n="pricing_trades_hint">One table per category. "Min charge" (optional) sets a floor on the line total for jobs too small to bill at the plain rate — leave at 0 for no minimum.</div>
           <button class="btn btn-outline btn-sm" id="addCategoryBtn" style="margin-bottom:14px; border-color:rgba(251,248,242,0.35); color:var(--chalk);" data-i18n="btn_edit_categories">✎ Edit categories</button>
           <div id="tradeAdminTables"></div>
+        </div>
+
+        <div id="pricingApplianceSection" style="display:none;">
+          <div class="sub" style="margin-bottom:8px;" data-i18n="pricing_appliances_hint">Names only, no pricing — these drive the Category / Item dropdowns on the "Appliances/Customer purchase" page.</div>
+          <button class="btn btn-outline btn-sm" id="addApplianceCategoryBtn" style="margin-bottom:14px; border-color:rgba(251,248,242,0.35); color:var(--chalk);" data-i18n="btn_edit_categories">✎ Edit categories</button>
+          <div id="applianceAdminTables"></div>
         </div>
       </div>
     </div>
@@ -1427,6 +1469,8 @@ document.getElementById('logoTopbar').src = LOGO_DATA_URI;
 /* ================= state ================= */
 let items = [];
 let itemSeq = 1;
+let customerPurchaseItems = []; // [{ category, item, qty, notes }, ...] — reference checklist for
+                                 // items the client sources themselves; never affects quote pricing.
 let currentType = 'cabinet';
 let docType = 'quotation'; // 'quotation' | 'estimate' | 'vo'
 let currentDocStatus = 'draft'; // 'draft' | 'issued' — drafts use a temp ID, issued quotes get a real P.O. number
@@ -1740,6 +1784,28 @@ const tradeCategories = {
 const TRADE_BUCKET = {};
 Object.keys(tradeCategories).forEach((cat, i) => { TRADE_BUCKET[cat] = i + 1; });
 
+// Appliances / Customer purchase — a reference-only catalog (category -> list of item names,
+// no pricing) admins manage from Admin -> Pricing. Used purely to drive the cascading Category /
+// Item dropdowns on the standalone "Appliances/Customer purchase" page; never affects quote totals.
+let appliancesCatalog = {
+  'Kitchen': [
+    'Range', 'Cook top', 'Fridge', 'Bar fridge', 'Oven', 'Microwave', 'Filtering system',
+    'Water heater', 'Quartz', 'Backsplash tiles', 'Floor tiles', 'Flooring', 'Sink', 'Faucet',
+    'Wood flooring', 'Vinyl flooring'
+  ],
+  'Bathroom': [
+    'Shower unit', 'Basin', 'Faucet', 'Shower faucet', 'Toilet bowl', 'Tissue holder',
+    'Warm towel rack', 'Wall-mounted hook', 'Towel holder', 'Wood flooring', 'Vinyl flooring',
+    'Floor tiles'
+  ],
+  'General': [
+    'Wood flooring', 'Vinyl flooring', 'Floor tiles', 'Crown molding', 'Baseboard', 'Door casing'
+  ],
+  'Living Room': [
+    'Fireplace', 'TV', 'Amplifier unit', 'Wood flooring', 'Vinyl flooring', 'Floor tiles'
+  ]
+};
+
 /* ================= pricing catalog persistence =================
    cabinetCatalog / countertopRates / tradeCategories are defined above as hardcoded starting
    defaults, but any admin edits (cost, profit %, renames, added items/materials/categories) need
@@ -1750,7 +1816,8 @@ async function savePricingData(){
   await storageSet(PRICING_KEY, {
     cabinetCatalog: cabinetCatalog,
     countertopRates: countertopRates,
-    tradeCategories: tradeCategories
+    tradeCategories: tradeCategories,
+    appliancesCatalog: appliancesCatalog
   }, true);
 }
 
@@ -1775,6 +1842,10 @@ async function loadPricingData(){
   // rebuild the print-order bucket map to match whatever category order was actually saved
   Object.keys(TRADE_BUCKET).forEach(k => delete TRADE_BUCKET[k]);
   Object.keys(tradeCategories).forEach((cat, i) => { TRADE_BUCKET[cat] = i + 1; });
+  if (data.appliancesCatalog){
+    Object.keys(appliancesCatalog).forEach(k => delete appliancesCatalog[k]);
+    Object.assign(appliancesCatalog, data.appliancesCatalog);
+  }
 }
 
 // Auto-generated Chinese short names for every stock catalog item, keyed by their English short
@@ -2369,6 +2440,19 @@ const translations = {
   tagline: { en: 'Quotation Builder — internal sales tool', zh: '報價系統 — 內部銷售工具' },
   nav_builder: { en: 'Quote Builder', zh: '報價製作' },
   nav_myquotes: { en: 'My Quotes', zh: '我的報價' },
+  nav_appliances: { en: 'Appliances/Customer purchase', zh: '電器／客戶自購' },
+  appliances_page_title: { en: 'Appliances / Customer purchase items', zh: '電器／客戶自購項目' },
+  appliances_page_hint: { en: 'Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range, fridge, faucets). This list is for reference only — it does not affect this quote\'s pricing.', zh: '記錄客戶自行購買的電器、配件與飾材（例如爐具、雪櫃、水龍頭）。此清單僅供參考，不會影響此報價的金額。' },
+  ph_cp_notes: { en: 'e.g. brand/model to be confirmed by client', zh: '例如：品牌／型號待客戶確認' },
+  cp_add: { en: '+ Add to list', zh: '+ 加入清單' },
+  cp_save_hint: { en: 'Saves with the rest of this quote.', zh: '將與此報價的其他內容一併儲存。' },
+  cp_select_category: { en: '— Select category —', zh: '— 選擇類別 —' },
+  cp_select_item: { en: '— Select item —', zh: '— 選擇項目 —' },
+  cp_for_quote: { en: 'For quote', zh: '所屬報價：' },
+  cp_for_quote_none: { en: 'This will be saved with your next new quote.', zh: '將與您下一份新報價一併儲存。' },
+  cp_pick_both: { en: 'Choose a category and an item first.', zh: '請先選擇類別與項目。' },
+  cp_empty: { en: 'No items added yet.', zh: '尚未加入任何項目。' },
+  pricing_appliances_hint: { en: 'Names only, no pricing — these drive the Category / Item dropdowns on the "Appliances/Customer purchase" page.', zh: '僅需名稱，無需定價 — 用於「電器／客戶自購」頁面的類別／項目下拉選單。' },
   nav_admin: { en: 'Admin', zh: '管理' },
   logout: { en: 'Log out', zh: '登出' },
 
@@ -2395,7 +2479,6 @@ const translations = {
 
   tab_cabinet: { en: 'Cabinetry', zh: '櫥櫃' },
   tab_trade: { en: 'Renovation &amp; trades', zh: '裝修與工程' },
-  tab_appliance: { en: 'Appliances', zh: '電器' },
 
   myquotes_title: { en: 'My Quotes', zh: '我的報價' },
   admin_title: { en: 'Admin', zh: '管理' },
@@ -2518,7 +2601,6 @@ const translations = {
   add_custom_item: { en: "+ Add a custom item", zh: "+ 新增自訂項目" },
   added_to_zone: { en: "Added to this cabinetry zone", zh: "將加入此櫃體區域" },
   added_to_trades: { en: "Added to Renovation & trades", zh: "將加入裝修與工程" },
-  added_to_appliances: { en: "Added to Appliances", zh: "將加入電器" },
   round_total: { en: "Round total", zh: "總額進位" },
   round_none: { en: "No rounding", zh: "不進位" },
   round_up: { en: "Round up", zh: "無條件進位" },
@@ -2626,8 +2708,7 @@ function applyLanguage(lang){
     if (typeof renderItems === 'function') renderItems();
     if (typeof renderPaymentPhases === 'function' && paymentPhases.length) renderPaymentPhases();
     if (typeof currentType !== 'undefined'){
-      $('customContextHint').textContent = currentType === 'cabinet' ? t('added_to_zone')
-        : currentType === 'appliance' ? t('added_to_appliances') : t('added_to_trades');
+      $('customContextHint').textContent = currentType === 'cabinet' ? t('added_to_zone') : t('added_to_trades');
     }
     if (typeof populateCabSubtypes === 'function') populateCabSubtypes();
     if (typeof populateCountertopOptions === 'function') populateCountertopOptions();
@@ -2869,16 +2950,98 @@ function setView(view){
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   $('builderView').style.display = view === 'builder' ? 'grid' : 'none';
   $('myQuotesView').style.display = view === 'myquotes' ? 'block' : 'none';
+  $('appliancesView').style.display = view === 'appliances' ? 'block' : 'none';
   $('adminView').style.display = view === 'admin' ? 'block' : 'none';
 
   if (view === 'myquotes') loadMyQuotes();
+  if (view === 'appliances') renderAppliancesPage();
   if (view === 'admin') setAdminSubTab(currentAdminSubTab);
+}
+
+/* ================= Appliances / Customer purchase page =================
+   A reference-only checklist (category + item, no price) for things the client sources
+   themselves. Lives on the current in-memory quote (customerPurchaseItems[]), saved together
+   with the rest of the quote via the normal "Save quote" flow — never affects quote totals. */
+function populateCpCategories(){
+  const sel = $('cpCategory');
+  if (!sel) return;
+  const prev = sel.value;
+  const cats = Object.keys(appliancesCatalog);
+  sel.innerHTML = `<option value="">${t('cp_select_category')}</option>` +
+    cats.map(c => `<option value="${c.replace(/"/g,'&quot;')}">${c.replace(/</g,'&lt;')}</option>`).join('');
+  sel.value = cats.includes(prev) ? prev : '';
+  populateCpItems();
+}
+
+function populateCpItems(){
+  const sel = $('cpItem');
+  if (!sel) return;
+  const cat = $('cpCategory').value;
+  const list = appliancesCatalog[cat] || [];
+  sel.innerHTML = `<option value="">${t('cp_select_item')}</option>` +
+    list.map(i => `<option value="${i.replace(/"/g,'&quot;')}">${i.replace(/</g,'&lt;')}</option>`).join('');
+  sel.disabled = !cat;
+}
+
+function renderAppliancesPage(){
+  const quoteNum = $('quoteNum').value.trim();
+  const clientName = $('clientName').value.trim();
+  $('appliancesQuoteContext').textContent = quoteNum
+    ? `${t('cp_for_quote')} ${quoteNum}${clientName ? ' — ' + clientName : ''}`
+    : t('cp_for_quote_none');
+  populateCpCategories();
+  renderCustomerPurchaseList();
+}
+
+function addCustomerPurchaseItem(){
+  const category = $('cpCategory').value;
+  const item = $('cpItem').value;
+  const qty = parseFloat($('cpQty').value) || 1;
+  const notes = $('cpNotes').value.trim();
+  if (!category || !item){ showAlert(t('cp_pick_both')); return; }
+
+  customerPurchaseItems.push({ category, item, qty, notes });
+  $('cpNotes').value = '';
+  $('cpQty').value = 1;
+  renderCustomerPurchaseList();
+}
+
+function removeCustomerPurchaseItem(idx){
+  customerPurchaseItems.splice(idx, 1);
+  renderCustomerPurchaseList();
+}
+
+function renderCustomerPurchaseList(){
+  const wrap = $('cpItemsList');
+  if (!customerPurchaseItems.length){
+    wrap.innerHTML = `<div class="empty-state">${t('cp_empty')}</div>`;
+    return;
+  }
+  wrap.innerHTML = customerPurchaseItems.map((r, i) => `
+    <div class="item-row">
+      <div>
+        <div class="grp">${(r.category||'').replace(/</g,'&lt;')}</div>
+        <div class="desc">${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}</div>
+        ${r.notes ? `<div class="meta">${r.notes.replace(/</g,'&lt;')}</div>` : ''}
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeCustomerPurchaseItem(${i})">${t('btn_remove')}</button>
+    </div>`).join('');
+}
+
+async function saveQuoteFromAppliancesPage(){
+  await saveQuote(true);
+  const src = $('saveStatus');
+  const dst = $('cpSaveStatus');
+  dst.style.display = 'block';
+  dst.style.color = src.style.color;
+  dst.textContent = src.textContent;
 }
 
 function setPricingSubTab(tab){
   document.querySelectorAll('#pricingSubTabs .sub-tab').forEach(t => t.classList.toggle('active', t.dataset.pricingtab === tab));
   $('pricingCabinetrySection').style.display = tab === 'cabinetry' ? 'block' : 'none';
   $('pricingTradesSection').style.display = tab === 'trades' ? 'block' : 'none';
+  $('pricingApplianceSection').style.display = tab === 'appliances' ? 'block' : 'none';
 }
 
 function setAdminSubTab(tab){
@@ -3126,6 +3289,7 @@ function buildQuoteRecord(){
     expectedStartDate: $('expectedStartDate').value,
     items: items,
     itemSeq: itemSeq,
+    customerPurchaseItems: customerPurchaseItems,
     markupPct: markupPct,
     discountPct: discountPct,
     taxPct: taxPct,
@@ -3881,6 +4045,7 @@ async function openQuote(id){
   $('leadSource').value = q.leadSource || 'Google Search';
   $('unitType').value = q.unitType || '';
   projectImages = q.projectImages || [];
+  customerPurchaseItems = q.customerPurchaseItems || [];
   setDocType(q.docType || 'quotation');
   currentDocStatus = q.docStatus || 'issued'; // quotes saved before this feature existed are treated as already-issued
   setVoDirection(q.voDirection || 'adding');
@@ -3933,6 +4098,7 @@ async function createVariationOrder(parentId){
   // fresh draft, pre-filled with the parent project's client info
   items = [];
   itemSeq = 1;
+  customerPurchaseItems = [];
   currentQuoteId = null;
   $('quoteNum').value = voNum;
   $('quoteDate').value = todayISO(0);
@@ -4099,6 +4265,8 @@ async function initBuilder(){
   populateCabMaterials();
   populateCountertopOptions();
   populateTradeCategories();
+  buildApplianceAdminTables();
+  populateCpCategories();
   updateCtRate();
   updateTradeCalc();
   updateCustomCalc();
@@ -4106,6 +4274,7 @@ async function initBuilder(){
   currentQuoteId = null;
   items = [];
   projectImages = [];
+  customerPurchaseItems = [];
   setDocType('quotation');
   setVoDirection('adding');
   $('roundIncrement').value = '100';
@@ -4208,8 +4377,66 @@ function openTradeCategoryManager(){
   );
 }
 
+function openApplianceCategoryManager(){
+  openItemManager(
+    appliancesCatalog, 'Appliances / Customer purchase categories', false, () => [],
+    () => { buildApplianceAdminTables(); populateCpCategories(); }
+  );
+}
+
 $('addMaterialBtn').addEventListener('click', openCabinetCategoryManager);
 $('addCategoryBtn').addEventListener('click', openTradeCategoryManager);
+$('addApplianceCategoryBtn').addEventListener('click', openApplianceCategoryManager);
+
+// Simple names-only editor for each Appliances/Customer purchase category's item list — addressed
+// by index rather than name so renames never need string-escaping in the generated onclick/oninput.
+function buildApplianceAdminTables(){
+  const wrap = $('applianceAdminTables');
+  const catKeys = Object.keys(appliancesCatalog);
+  wrap.innerHTML = catKeys.map((cat, ci) => `
+    <h4>${cat.replace(/</g,'&lt;')}</h4>
+    <div class="phase-row-list">
+      ${appliancesCatalog[cat].map((name, ii) => `
+        <div class="phase-row">
+          <div class="desc-field">
+            <input type="text" value="${(name||'').replace(/"/g,'&quot;')}" oninput="updateApplianceItem(${ci}, ${ii}, this.value)">
+          </div>
+          <button class="btn btn-danger btn-sm phase-remove" onclick="removeApplianceItem(${ci}, ${ii})">${t('btn_remove')}</button>
+        </div>`).join('')}
+      <div class="add-row">
+        <input type="text" id="newApplianceItem_${ci}" placeholder="New item name">
+        <button class="btn btn-outline btn-sm" onclick="addApplianceItem(${ci})">+ Add item</button>
+      </div>
+    </div>`).join('');
+}
+
+function updateApplianceItem(catIdx, itemIdx, value){
+  const cat = Object.keys(appliancesCatalog)[catIdx];
+  if (!cat) return;
+  appliancesCatalog[cat][itemIdx] = value;
+  savePricingData();
+  populateCpCategories();
+}
+function removeApplianceItem(catIdx, itemIdx){
+  const cat = Object.keys(appliancesCatalog)[catIdx];
+  if (!cat) return;
+  appliancesCatalog[cat].splice(itemIdx, 1);
+  savePricingData();
+  buildApplianceAdminTables();
+  populateCpCategories();
+}
+function addApplianceItem(catIdx){
+  const cat = Object.keys(appliancesCatalog)[catIdx];
+  if (!cat) return;
+  const input = $('newApplianceItem_' + catIdx);
+  const name = (input.value || '').trim();
+  if (!name) return;
+  appliancesCatalog[cat].push(name);
+  input.value = '';
+  savePricingData();
+  buildApplianceAdminTables();
+  populateCpCategories();
+}
 
 function buildRateTables(){
   // one small table per cabinet material
@@ -4310,20 +4537,14 @@ function setItemType(type){
   currentType = type;
   $('tabCabinet').classList.toggle('active', type==='cabinet');
   $('tabTrade').classList.toggle('active', type==='trade');
-  $('tabAppliance').classList.toggle('active', type==='appliance');
   $('cabinetForm').style.display = type==='cabinet' ? 'block' : 'none';
   $('tradeForm').style.display = type==='trade' ? 'block' : 'none';
-  $('applianceForm').style.display = type==='appliance' ? 'block' : 'none';
 
   const box = $('customItemBox');
   if (type === 'cabinet'){
     $('cabinetForm').appendChild(box);
     $('customContextHint').textContent = t('added_to_zone');
     $('customZone').value = $('cabZone').value;
-  } else if (type === 'appliance'){
-    $('applianceForm').appendChild(box);
-    $('customContextHint').textContent = t('added_to_appliances');
-    $('customZone').value = 'Appliances';
   } else {
     $('tradeForm').appendChild(box);
     $('customContextHint').textContent = t('added_to_trades');
@@ -5068,10 +5289,6 @@ async function addCustomItem(){
     // recognized as a cabinetry item — joins the zone entered in this box, same as cabinet/countertop lines
     group = $('customZone').value.trim() || 'Cabinetry';
     sortBucket = 0;
-  } else if (currentType === 'appliance'){
-    // recognized as an appliance item — joins the zone entered in this box, defaulting to its own section
-    group = $('customZone').value.trim() || 'Appliances';
-    sortBucket = 50;
   } else {
     // recognized as a Renovation & trades item
     group = 'Custom / Other';
@@ -5308,6 +5525,15 @@ function renderQuote(){
         ${$('stdNotesText').value.replace(/\n/g,'<br>')}
       </div>`);
   }
+  if (customerPurchaseItems.length){
+    page1Blocks.push(`
+      <div class="doc-notes">
+        <div class="h">Customer-purchased items (reference only — not included in this quote)</div>
+        <ul style="margin:4px 0 0; padding-left:18px;">
+          ${customerPurchaseItems.map(r => `<li>${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''} — ${(r.category||'').replace(/</g,'&lt;')}${r.notes ? ' (' + r.notes.replace(/</g,'&lt;') + ')' : ''}</li>`).join('')}
+        </ul>
+      </div>`);
+  }
   page1Blocks.push(signBlock);
   blockGroups.push({ forceNewPage: false, blocks: page1Blocks, headerHtml: docHeadBlock });
 
@@ -5482,6 +5708,7 @@ async function resetQuote(silent){
   ['clientName','clientPhone','clientEmail','clientAddress','cabZone'].forEach(id => $(id).value = '');
   $('unitType').value = '';
   projectImages = [];
+  customerPurchaseItems = [];
   setDocType('quotation');
   setVoDirection('adding');
   $('roundIncrement').value = '100';
