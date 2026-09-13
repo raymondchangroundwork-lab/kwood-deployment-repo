@@ -748,6 +748,8 @@
   <div class="modal-box" style="max-width:460px;">
     <div class="modal-message" style="font-weight:700; margin-bottom:2px;" data-i18n="edit_cp_title">Edit customer purchase item</div>
 
+    <label data-i18n="zone_area_name">Zone / area name</label>
+    <input id="editCpZone" list="zoneSuggestions">
     <div class="grid3">
       <div>
         <label data-i18n="category">Category</label>
@@ -755,13 +757,15 @@
       </div>
       <div>
         <label data-i18n="item">Item</label>
-        <select id="editCpItem"></select>
+        <select id="editCpItem" onchange="document.getElementById('editCpCustomItem').value=''"></select>
       </div>
       <div>
         <label data-i18n="quantity">Quantity</label>
         <input id="editCpQty" type="number" min="1" step="1">
       </div>
     </div>
+    <label data-i18n="cp_custom_item">Or type a custom item</label>
+    <input id="editCpCustomItem" placeholder="e.g. Wine fridge" data-i18n-ph="ph_cp_custom_item" oninput="if(this.value) document.getElementById('editCpItem').value=''">
     <div class="grid3">
       <div>
         <label data-i18n="cp_decision_by">Decision to be made by</label>
@@ -1109,6 +1113,9 @@
             Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range,
             fridge, faucets). This list is for reference only — it does not affect this quote's pricing.
           </div>
+          <label data-i18n="zone_area_name">Zone / area name</label>
+          <input id="cpZone" list="zoneSuggestions" placeholder="e.g. Kitchen" data-i18n-ph="ph_zone">
+          <div class="rate-hint" data-i18n="cp_zone_hint">Groups this item in the quotation preview — e.g. "Kitchen", "Ensuite Bathroom".</div>
           <div class="grid3">
             <div>
               <label data-i18n="category">Category</label>
@@ -1116,13 +1123,15 @@
             </div>
             <div>
               <label data-i18n="item">Item</label>
-              <select id="cpItem"></select>
+              <select id="cpItem" onchange="document.getElementById('cpCustomItem').value=''"></select>
             </div>
             <div>
               <label data-i18n="quantity">Quantity</label>
               <input id="cpQty" type="number" min="1" step="1" value="1">
             </div>
           </div>
+          <label data-i18n="cp_custom_item">Or type a custom item</label>
+          <input id="cpCustomItem" placeholder="e.g. Wine fridge" data-i18n-ph="ph_cp_custom_item" oninput="if(this.value) document.getElementById('cpItem').value=''">
           <div class="grid3">
             <div>
               <label data-i18n="cp_decision_by">Decision to be made by</label>
@@ -2052,7 +2061,9 @@ function todayISO(offsetDays = 0){
 }
 
 function refreshZoneSuggestions(){
-  const zones = [...new Set(items.filter(i => i.sortBucket === 0).map(i => i.group))];
+  const cabinetZones = items.filter(i => i.sortBucket === 0).map(i => i.group);
+  const cpZones = customerPurchaseItems.map(r => r.zone).filter(Boolean);
+  const zones = [...new Set([...cabinetZones, ...cpZones])];
   $('zoneSuggestions').innerHTML = zones.map(z => `<option value="${z.replace(/"/g,'&quot;')}"></option>`).join('');
 }
 
@@ -2540,9 +2551,12 @@ const translations = {
   appliances_page_hint: { en: 'Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range, fridge, faucets). This list is for reference only — it does not affect this quote\'s pricing.', zh: '記錄客戶自行購買的電器、配件與飾材（例如爐具、雪櫃、水龍頭）。此清單僅供參考，不會影響此報價的金額。' },
   ph_cp_notes: { en: 'e.g. brand/model to be confirmed by client', zh: '例如：品牌／型號待客戶確認' },
   cp_add: { en: '+ Add to list', zh: '+ 加入清單' },
+  cp_zone_hint: { en: 'Groups this item in the quotation preview — e.g. "Kitchen", "Ensuite Bathroom".', zh: '用於在報價預覽中分組此項目 — 例如「廚房」、「主浴室」。' },
+  cp_custom_item: { en: 'Or type a custom item', zh: '或輸入自訂項目' },
+  ph_cp_custom_item: { en: 'e.g. Wine fridge', zh: '例如：酒櫃' },
   cp_select_category: { en: '— Select category —', zh: '— 選擇類別 —' },
   cp_select_item: { en: '— Select item —', zh: '— 選擇項目 —' },
-  cp_pick_both: { en: 'Choose a category and an item first.', zh: '請先選擇類別與項目。' },
+  cp_pick_both: { en: 'Choose a category, then pick an item or type a custom one.', zh: '請先選擇類別，再選擇項目或輸入自訂項目。' },
   cp_empty: { en: 'No items added yet.', zh: '尚未加入任何項目。' },
   cp_decision_by: { en: 'Decision to be made by', zh: '需於此日期前決定' },
   cp_deliver_date: { en: 'Deliver date', zh: '送貨日期' },
@@ -3084,8 +3098,10 @@ function populateCpItems(){
 }
 
 function addCustomerPurchaseItem(){
+  const zone = $('cpZone').value.trim();
   const category = $('cpCategory').value;
-  const item = $('cpItem').value;
+  const customItem = $('cpCustomItem').value.trim();
+  const item = customItem || $('cpItem').value;
   const qty = parseFloat($('cpQty').value) || 1;
   const notes = $('cpNotes').value.trim();
   const decisionBy = $('cpDecisionBy').value;
@@ -3093,12 +3109,14 @@ function addCustomerPurchaseItem(){
   const deliverTo = $('cpDeliverTo').value;
   if (!category || !item){ showAlert(t('cp_pick_both')); return; }
 
-  customerPurchaseItems.push({ category, item, qty, notes, decisionBy, deliverDate, deliverTo });
+  customerPurchaseItems.push({ zone: zone || category, category, item, qty, notes, decisionBy, deliverDate, deliverTo });
   $('cpNotes').value = '';
   $('cpQty').value = 1;
+  $('cpCustomItem').value = '';
   $('cpDecisionBy').value = '';
   $('cpDeliverDate').value = '';
   $('cpDeliverTo').value = 'site';
+  refreshZoneSuggestions();
   renderCustomerPurchaseList();
   renderQuote();
 }
@@ -3127,7 +3145,15 @@ function openEditCpModal(idx){
   $('editCpCategory').innerHTML = cats.map(c => `<option value="${c.replace(/"/g,'&quot;')}">${c.replace(/</g,'&lt;')}</option>`).join('');
   $('editCpCategory').value = r.category;
   populateEditCpItems();
-  $('editCpItem').value = r.item;
+  const catalogItems = appliancesCatalog[r.category] || [];
+  if (catalogItems.includes(r.item)){
+    $('editCpItem').value = r.item;
+    $('editCpCustomItem').value = '';
+  } else {
+    $('editCpItem').value = '';
+    $('editCpCustomItem').value = r.item || '';
+  }
+  $('editCpZone').value = r.zone || '';
   $('editCpQty').value = r.qty;
   $('editCpDecisionBy').value = r.decisionBy || '';
   $('editCpDeliverDate').value = r.deliverDate || '';
@@ -3140,8 +3166,11 @@ $('editCpSaveBtn').addEventListener('click', () => {
   const r = customerPurchaseItems[editCpTargetIdx];
   if (!r) return;
   const category = $('editCpCategory').value;
-  const item = $('editCpItem').value;
+  const customItem = $('editCpCustomItem').value.trim();
+  const item = customItem || $('editCpItem').value;
   if (!category || !item){ showAlert(t('cp_pick_both')); return; }
+  const zone = $('editCpZone').value.trim();
+  r.zone = zone || category;
   r.category = category;
   r.item = item;
   r.qty = parseFloat($('editCpQty').value) || 1;
@@ -3150,6 +3179,7 @@ $('editCpSaveBtn').addEventListener('click', () => {
   r.deliverTo = $('editCpDeliverTo').value;
   r.notes = $('editCpNotes').value.trim();
   $('editCpModal').style.display = 'none';
+  refreshZoneSuggestions();
   renderCustomerPurchaseList();
   renderQuote();
 });
@@ -3170,11 +3200,11 @@ function renderCustomerPurchaseList(){
     return;
   }
 
-  // auto-group by zone/category, regardless of add order, mirroring Quote items' grouping
+  // auto-group by zone, regardless of add order, mirroring Quote items' grouping
   const byGroup = {};
   const groupOrder = [];
   customerPurchaseItems.forEach((r, i) => {
-    const g = r.category || 'Other';
+    const g = r.zone || r.category || 'Other';
     if (!(g in byGroup)){ byGroup[g] = []; groupOrder.push(g); }
     byGroup[g].push(i); // keep the original array index for edit/remove
   });
@@ -3183,7 +3213,7 @@ function renderCustomerPurchaseList(){
     <div class="items-group-head">${g.replace(/</g,'&lt;')}</div>
     ${byGroup[g].map(i => {
       const r = customerPurchaseItems[i];
-      const details = [];
+      const details = [`${t('category')}: ${(r.category||'').replace(/</g,'&lt;')}`];
       if (r.decisionBy) details.push(`${t('cp_decision_by')}: ${cpFmtDate(r.decisionBy)}`);
       if (r.deliverDate) details.push(`${t('cp_deliver_date')}: ${cpFmtDate(r.deliverDate)}`);
       details.push(`${t('cp_deliver_to')}: ${cpDeliverToLabel(r.deliverTo)}`);
@@ -5772,7 +5802,7 @@ function renderQuote(){
     const cpByZone = {};
     const cpZoneOrder = [];
     customerPurchaseItems.forEach(r => {
-      const zone = r.category || 'Other';
+      const zone = r.zone || r.category || 'Other';
       if (!(zone in cpByZone)){ cpByZone[zone] = []; cpZoneOrder.push(zone); }
       cpByZone[zone].push(r);
     });
