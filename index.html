@@ -631,6 +631,27 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="changePasswordModal" style="display:none;">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-message" style="font-weight:700; margin-bottom:2px;">Change password</div>
+    <div class="login-error" id="changePasswordError"></div>
+
+    <label>Current password</label>
+    <input id="changePasswordCurrent" type="password" autocomplete="current-password">
+
+    <label>New password</label>
+    <input id="changePasswordNew" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+
+    <label>Confirm new password</label>
+    <input id="changePasswordConfirm" type="password" autocomplete="new-password">
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="changePasswordCancelBtn" style="border-color:var(--paper-line); color:var(--pencil);">Cancel</button>
+      <button class="btn btn-primary" id="changePasswordSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ================= PURCHASE RECORD — description + receipt photo for a specific area's sub P.O. ================= -->
 <div class="modal-overlay" id="purchaseModal" style="display:none;">
   <div class="modal-box" style="max-width:460px;">
@@ -765,6 +786,7 @@
           <div class="u-role" id="userRole">—</div>
         </div>
       </div>
+      <button class="btn btn-ghost" id="changePasswordBtn" style="margin-right:8px;">Change password</button>
       <button class="btn btn-ghost" id="logoutBtn" data-i18n="logout">Log out</button>
     </div>
   </div>
@@ -1244,6 +1266,7 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
       <div class="sub-tab active" data-subtab="pricing" onclick="setAdminSubTab('pricing')" data-i18n="admin_pricing">Pricing</div>
       <div class="sub-tab" data-subtab="users" onclick="setAdminSubTab('users')" data-i18n="admin_users">Users</div>
       <div class="sub-tab" data-subtab="reports" onclick="setAdminSubTab('reports')" data-i18n="admin_reports">Reports</div>
+      <div class="sub-tab" data-subtab="auditlog" onclick="setAdminSubTab('auditlog')">Audit log</div>
     </div>
 
     <!-- Pricing sub-tab -->
@@ -1354,7 +1377,7 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
 
       <div class="form-card" style="margin-top:26px;">
         <h3>Storage usage</h3>
-        <div class="sub" style="margin-bottom:10px;">The shared storage this app uses has a total size limit. If saving starts failing with a server error, it's usually because this limit has been reached — the quotes below are sorted largest first, so you can delete or trim the biggest ones to free up space.</div>
+        <div class="sub" style="margin-bottom:10px;">Approximate size of each saved quote in the local database — largest first. Quotes with embedded rendering or receipt photos are the usual size hogs; trim or remove images from a quote if it's getting too large to save.</div>
         <button class="btn btn-outline btn-sm" onclick="loadStorageUsage()">↻ Check storage usage</button>
         <div id="storageUsageSummary" style="margin-top:14px;"></div>
         <div class="table-scroll">
@@ -1363,6 +1386,22 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
             <tbody id="storageUsageBody"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- Audit log sub-tab -->
+    <div id="adminAuditLog" style="display:none;">
+      <div class="form-card">
+        <h3>Audit log</h3>
+        <div class="sub" style="margin-bottom:10px;">Every login, logout, password change, and quote/user create-edit-delete action, most recent first.</div>
+        <button class="btn btn-outline btn-sm" onclick="loadAuditLog()">↻ Refresh</button>
+      </div>
+      <div id="auditLogStatus" class="empty-panel">Loading…</div>
+      <div class="table-scroll">
+        <table class="data-table" id="auditLogTable" style="display:none;">
+          <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+          <tbody id="auditLogBody"></tbody>
+        </table>
       </div>
     </div>
     </div>
@@ -2051,34 +2090,51 @@ $('itemModalSaveBtn').addEventListener('click', async () => {
   if (itemModalOnSave) itemModalOnSave();
 });
 
+/* These four functions are the only place that talks to the backend's generic storage API
+   (server/src/routes/storage.js) — everywhere else in this file still just calls
+   storageGet/storageSet/storageDelete/storageListKeys exactly as before, so the switch from
+   Claude artifact storage to the local Node/SQLite backend needed no changes anywhere else.
+   The backend enforces auth and per-role permissions server-side based on the key's prefix. */
 async function storageGet(key, shared){
-  try { const r = await window.storage.get(key, shared); return r ? r.value : null; }
-  catch(e){ return null; }
+  try {
+    const res = await fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, { credentials: 'include' });
+    if (!res.ok) return null;
+    const r = await res.json();
+    return r ? r.value : null;
+  } catch(e){ return null; }
 }
 async function storageSet(key, value, shared){
-  const payload = JSON.stringify(value);
+  const attempt = () => fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ value })
+  });
   try {
-    const r = await window.storage.set(key, payload, shared);
-    return !!r;
-  } catch(e){
-    console.error('storage set failed, retrying once', e);
+    const res = await attempt();
+    if (res.ok) return true;
+    console.error('storage set failed, retrying once', res.status);
     await new Promise(resolve => setTimeout(resolve, 800));
-    try {
-      const r2 = await window.storage.set(key, payload, shared);
-      return !!r2;
-    } catch(e2){
-      console.error('storage set failed on retry', e2);
-      return false;
-    }
+    const res2 = await attempt();
+    return res2.ok;
+  } catch(e){
+    console.error('storage set failed', e);
+    return false;
   }
 }
 async function storageDelete(key, shared){
-  try { await window.storage.delete(key, shared); return true; }
-  catch(e){ return false; }
+  try {
+    const res = await fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, { method: 'DELETE', credentials: 'include' });
+    return res.ok;
+  } catch(e){ return false; }
 }
 async function storageListKeys(prefix, shared){
-  try { const r = await window.storage.list(prefix, shared); return r ? r.keys : []; }
-  catch(e){ return []; }
+  try {
+    const res = await fetch(`/api/storage/list?prefix=${encodeURIComponent(prefix)}`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const r = await res.json();
+    return r ? r.keys : [];
+  } catch(e){ return []; }
 }
 
 async function loadStorageUsage(){
@@ -2093,8 +2149,7 @@ async function loadStorageUsage(){
   let totalBytes = 0;
 
   for (const k of keys){
-    const raw = await window.storage.get(k, true).catch(() => null);
-    const rawValue = raw ? raw.value : null;
+    const rawValue = await storageGet(k, true);
     if (!rawValue) continue;
     const sizeBytes = new Blob([rawValue]).size;
     totalBytes += sizeBytes;
@@ -2110,14 +2165,10 @@ async function loadStorageUsage(){
   rows.sort((a,b) => b.sizeBytes - a.sizeBytes);
 
   const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
-  const CAP_MB = 20; // the shared storage backend's approximate total-per-artifact ceiling
-  const pctUsed = Math.min(100, (totalBytes / (CAP_MB * 1024 * 1024)) * 100).toFixed(0);
   summary.innerHTML = `
     <div style="font-size:13px; color:var(--graphite); margin-bottom:6px;">
-      <strong>${rows.length}</strong> quotes stored, approximately <strong>${totalMB} MB</strong> total
-      (roughly <strong>${pctUsed}%</strong> of the ~${CAP_MB} MB shared limit).
+      <strong>${rows.length}</strong> quotes stored, approximately <strong>${totalMB} MB</strong> total.
     </div>
-    ${pctUsed >= 80 ? `<div style="color:var(--error); font-size:12.5px; font-weight:600;">This is close to or over the limit — delete or trim some of the largest quotes below.</div>` : ''}
   `;
 
   if (rows.length){
@@ -2212,11 +2263,10 @@ async function refreshQuoteNumberForStartDate(){
   renderQuote();
 }
 
-/* ================= boot / session ================= */
-// Set to false to temporarily skip password checks (login screen still shows, just no password needed).
-const REQUIRE_PASSWORD = true;
-// Set to false to temporarily skip the login screen entirely and open straight in as admin.
-const REQUIRE_LOGIN = true;
+/* ================= boot / session =================
+   Auth now lives entirely on the backend (server/src/routes/auth.js): password checks happen
+   server-side against an Argon2id hash, and the session is an HttpOnly cookie the browser can't
+   read or forge. There is no client-side bypass for either — a real account is always required. */
 
 /* ================= language toggle (English / Traditional Chinese) =================
    Covers navigation, section headings, and primary buttons — the parts of the app used
@@ -2502,8 +2552,8 @@ function toggleLanguage(){
 }
 
 async function boot(){
-  const storageOk = await checkStorageAvailable();
-  if (!storageOk){
+  const backendOk = await checkStorageAvailable();
+  if (!backendOk){
     showStorageUnavailableScreen();
     return;
   }
@@ -2511,36 +2561,27 @@ async function boot(){
   await loadPricingData();
   await loadDraftFolders();
   await seedChineseItemNames();
-  await ensureAdminSeed();
-  if (!REQUIRE_PASSWORD){
-    $('passwordField').style.display = 'none';
-    $('loginHint').textContent = 'Password login is temporarily switched off — just enter your username to sign in.';
-  }
+
   $('loginBtn').addEventListener('click', doLogin);
   $('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('logoutBtn').addEventListener('click', doLogout);
 
-  if (!REQUIRE_LOGIN){
-    const raw = await storageGet(USERS_PREFIX + 'admin', true);
-    if (raw){
-      await completeLogin(JSON.parse(raw));
-      return;
+  // Sessions are now real, cookie-backed server sessions — resume one if it's still valid
+  // (e.g. after a page refresh) instead of forcing a fresh login every time.
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    if (res.ok){
+      const { user } = await res.json();
+      await completeLogin(user);
     }
-  }
+  } catch(e){ /* not logged in — show the login screen as normal */ }
 }
 
 async function checkStorageAvailable(){
-  // window.storage may simply not exist in this view (unpublished artifact, or a viewer that
-  // doesn't support it), or calls may silently fail — do a real round-trip test rather than
-  // just checking the function exists, since a broken/no-op storage looks identical otherwise.
-  if (typeof window.storage === 'undefined') return false;
   try {
-    const probeKey = '__storage_probe__';
-    const probeVal = String(Date.now());
-    await window.storage.set(probeKey, probeVal, true);
-    const readBack = await window.storage.get(probeKey, true);
-    return !!(readBack && readBack.value === probeVal);
+    const res = await fetch('/api/health', { credentials: 'include' });
+    return res.ok;
   } catch (e){
     return false;
   }
@@ -2550,41 +2591,20 @@ function showStorageUnavailableScreen(){
   $('loginScreen').innerHTML = `
     <div class="login-card" style="max-width:420px;">
       <img id="logoLogin" alt="K-Wood Kitchens &amp; Bath" style="display:block; max-width:200px; margin:0 auto 18px;">
-      <h1 style="color:var(--error);">Storage isn't available here</h1>
+      <h1 style="color:var(--error);">Can't reach the K-Wood server</h1>
       <p class="sub" style="text-align:left; line-height:1.6;">
-        This app saves logins and quotes using Claude's artifact storage, which only works when you open the
-        <strong>published version</strong> of this artifact — and works most reliably in a regular mobile
-        browser (Safari / Chrome) rather than inside the Claude app's built-in viewer.
+        This app is served by a local Node.js backend that also stores logins and quotes in a
+        SQLite database on this PC. That server doesn't seem to be running right now.
       </p>
       <p class="sub" style="text-align:left; line-height:1.6;">
-        <strong>To fix this on your phone:</strong><br>
-        1. On the device where this works, open the share/publish link for this artifact.<br>
-        2. Copy that link.<br>
-        3. On your phone, paste it into Safari or Chrome directly (not the Claude app) and open it there.
-      </p>
-      <p class="sub" style="text-align:left; line-height:1.6;">
-        If it still doesn't work after that, the artifact may not be published yet, or persistent storage
-        may not be enabled on your current plan.
+        <strong>To fix this:</strong><br>
+        1. Open a terminal in the <code>server</code> folder.<br>
+        2. Run <code>npm start</code>.<br>
+        3. Reload <code>http://localhost:3000</code> in your browser.
       </p>
     </div>`;
   $('loginScreen').style.display = 'flex';
   $('logoLogin').src = LOGO_DATA_URI;
-}
-
-async function ensureAdminSeed(){
-  const keys = await storageListKeys(USERS_PREFIX, true);
-  if (keys.length === 0){
-    await storageSet(USERS_PREFIX + 'admin', {
-      username: 'admin', password: 'admin', name: 'Administrator', role: 'admin', createdAt: new Date().toISOString()
-    }, true);
-  }
-  // seed the Executive Officer account specifically, independent of whether other users already exist
-  const vickieRaw = await storageGet(USERS_PREFIX + 'vickie', true);
-  if (!vickieRaw){
-    await storageSet(USERS_PREFIX + 'vickie', {
-      username: 'vickie', password: 'vickie', name: 'Vickie', role: 'exec', createdAt: new Date().toISOString()
-    }, true);
-  }
 }
 
 function showLoginError(msg){
@@ -2614,20 +2634,33 @@ async function doLogin(){
   clearLoginError();
   const uname = $('loginUsername').value.trim().toLowerCase();
   const pwd = $('loginPassword').value;
-  if (!uname || (REQUIRE_PASSWORD && !pwd)){ showLoginError(REQUIRE_PASSWORD ? 'Enter a username and password.' : 'Enter a username.'); return; }
+  if (!uname || !pwd){ showLoginError('Enter a username and password.'); return; }
 
   $('loginBtn').textContent = 'Signing in…';
-  const raw = await storageGet(USERS_PREFIX + uname, true);
+  let res, body;
+  try {
+    res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username: uname, password: pwd })
+    });
+    body = await res.json();
+  } catch(e){
+    $('loginBtn').textContent = 'Log in';
+    showLoginError('Could not reach the server. Is it running?');
+    return;
+  }
   $('loginBtn').textContent = 'Log in';
 
-  if (!raw){ showLoginError('No account found with that username.'); return; }
-  const user = JSON.parse(raw);
-  if (REQUIRE_PASSWORD && user.password !== pwd){ showLoginError('Incorrect password.'); return; }
-
-  await completeLogin(user);
+  if (!res.ok){ showLoginError(body.error || 'Login failed.'); return; }
+  await completeLogin(body.user);
 }
 
-function doLogout(){
+async function doLogout(){
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch(e){ /* clear the local UI regardless of whether the network call succeeded */ }
   currentUser = null;
   items = [];
   currentQuoteId = null;
@@ -2637,6 +2670,66 @@ function doLogout(){
   $('loginPassword').value = '';
   clearLoginError();
 }
+
+/* ================= change password (self-service, any logged-in role) ================= */
+function openChangePasswordModal(){
+  $('changePasswordCurrent').value = '';
+  $('changePasswordNew').value = '';
+  $('changePasswordConfirm').value = '';
+  $('changePasswordError').classList.remove('show');
+  $('changePasswordModal').style.display = 'flex';
+  $('changePasswordCurrent').focus();
+}
+function closeChangePasswordModal(){
+  $('changePasswordModal').style.display = 'none';
+}
+$('changePasswordBtn').addEventListener('click', openChangePasswordModal);
+$('changePasswordCancelBtn').addEventListener('click', closeChangePasswordModal);
+$('changePasswordSaveBtn').addEventListener('click', async () => {
+  const errEl = $('changePasswordError');
+  errEl.classList.remove('show');
+
+  const currentPassword = $('changePasswordCurrent').value;
+  const newPassword = $('changePasswordNew').value;
+  const confirmPassword = $('changePasswordConfirm').value;
+
+  if (!currentPassword || !newPassword){
+    errEl.textContent = 'Fill in both password fields.';
+    errEl.classList.add('show');
+    return;
+  }
+  if (newPassword !== confirmPassword){
+    errEl.textContent = 'New password and confirmation do not match.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  $('changePasswordSaveBtn').textContent = 'Saving…';
+  let res, body;
+  try {
+    res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    body = await res.json();
+  } catch(e){
+    $('changePasswordSaveBtn').textContent = 'Save';
+    errEl.textContent = 'Could not reach the server.';
+    errEl.classList.add('show');
+    return;
+  }
+  $('changePasswordSaveBtn').textContent = 'Save';
+
+  if (!res.ok){
+    errEl.textContent = body.error || 'Could not change password.';
+    errEl.classList.add('show');
+    return;
+  }
+  closeChangePasswordModal();
+  await showAlert('Password changed.');
+});
 
 /* ================= view routing ================= */
 function setView(view){
@@ -2662,11 +2755,41 @@ function setAdminSubTab(tab){
   $('adminPricing').style.display = tab === 'pricing' ? 'block' : 'none';
   $('adminUsers').style.display = tab === 'users' ? 'block' : 'none';
   $('adminReports').style.display = tab === 'reports' ? 'block' : 'none';
+  $('adminAuditLog').style.display = tab === 'auditlog' ? 'block' : 'none';
   if (tab === 'users') loadUsers();
   if (tab === 'reports'){
     if (!$('reportMonth').value) $('reportMonth').value = new Date().toISOString().slice(0,7);
     renderMonthlyReport();
   }
+  if (tab === 'auditlog') loadAuditLog();
+}
+
+async function loadAuditLog(){
+  $('auditLogStatus').style.display = 'block';
+  $('auditLogStatus').textContent = 'Loading…';
+  $('auditLogTable').style.display = 'none';
+
+  let logs = [];
+  try {
+    const res = await fetch('/api/admin/audit-logs?limit=300', { credentials: 'include' });
+    if (res.ok){ ({ logs } = await res.json()); }
+  } catch(e){ /* leave logs empty — status message below covers it */ }
+
+  if (!logs.length){
+    $('auditLogStatus').textContent = 'No audit log entries yet.';
+    return;
+  }
+  $('auditLogStatus').style.display = 'none';
+  $('auditLogTable').style.display = 'table';
+  $('auditLogBody').innerHTML = logs.map(l => `
+    <tr>
+      <td>${new Date(l.created_at).toLocaleString()}</td>
+      <td>${l.username || '—'}</td>
+      <td>${l.action}</td>
+      <td>${l.entity_type || ''}${l.entity_id ? ' #' + l.entity_id : ''}</td>
+      <td>${l.details_json ? l.details_json.replace(/</g,'&lt;') : ''}</td>
+    </tr>
+  `).join('');
 }
 
 /* ================= user management (admin) ================= */
