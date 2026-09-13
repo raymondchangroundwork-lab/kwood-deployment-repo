@@ -5143,6 +5143,7 @@ function renderQuote(){
   const markupPct = parseFloat($('markupPct').value) || 0;
   const discountPct = parseFloat($('discountPct').value) || 0;
   const taxPct = parseFloat($('taxPct').value) || 0;
+  const markupFactor = 1 + markupPct/100;
   const markupAmt = subtotal * (markupPct/100);
   const afterMarkup = subtotal + markupAmt;
   const discountAmt = afterMarkup * (discountPct/100);
@@ -5269,7 +5270,7 @@ function renderQuote(){
     page1Blocks.push(`
       <div class="zone-summary" style="margin-top:0;">
         <div class="zone-block">
-          <div class="zs-row"><span class="zs-name">${areaNum} — ${z}</span><span class="zs-amt">${money(zoneTotals[z])} + HST</span></div>
+          <div class="zs-row"><span class="zs-name">${areaNum} — ${z}</span><span class="zs-amt">${money(zoneTotals[z] * markupFactor)} + HST</span></div>
           <ul class="zs-bullets">${zoneItems[z].map(desc => `<li>${desc}</li>`).join('')}</ul>
         </div>
       </div>`);
