@@ -775,7 +775,6 @@
     <div class="nav-tabs" id="navTabs">
       <div class="nav-tab active" data-view="builder" onclick="setView('builder')" data-i18n="nav_builder">Quote Builder</div>
       <div class="nav-tab" data-view="myquotes" onclick="setView('myquotes')" data-i18n="nav_myquotes">My Quotes</div>
-      <div class="nav-tab" data-view="appliances" onclick="setView('appliances')" data-i18n="nav_appliances">Appliances/Customer purchase</div>
       <div class="nav-tab" data-view="admin" id="navAdminTab" style="display:none;" onclick="setView('admin')" data-i18n="nav_admin">Admin</div>
     </div>
     <div class="topbar-actions">
@@ -900,6 +899,7 @@
         <div class="toggle-row">
           <div class="toggle-btn active" id="tabCabinet" onclick="setItemType('cabinet')" data-i18n="tab_cabinet">Cabinetry</div>
           <div class="toggle-btn" id="tabTrade" onclick="setItemType('trade')" data-i18n="tab_trade">Renovation &amp; trades</div>
+          <div class="toggle-btn" id="tabAppliance" onclick="setItemType('appliance')" data-i18n="nav_appliances">Appliances/Customer purchase</div>
         </div>
 
         <div class="quote-progress" id="quoteProgress" data-i18n="quote_progress_hint">No items yet — fill in the form below, then click <strong>+ Add item</strong>. You can add as many items as you need; each one stacks into the same quotation.</div>
@@ -1015,6 +1015,33 @@
           <div class="add-row"><button class="btn btn-dark" onclick="addTradeItem()" data-i18n="btn_add_item">+ Add item</button></div>
         </div>
 
+        <!-- APPLIANCES / CUSTOMER PURCHASE FORM — cascading Category/Item dropdowns, driven by an
+             admin-managed catalog (Admin -> Pricing -> Appliances/Customer purchase). Reference
+             only: items go into their own checklist (customerPurchaseItems[]), never priced. -->
+        <div id="applianceForm" style="display:none;">
+          <div class="rate-hint" data-i18n="appliances_page_hint">
+            Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range,
+            fridge, faucets). This list is for reference only — it does not affect this quote's pricing.
+          </div>
+          <div class="grid3">
+            <div>
+              <label data-i18n="category">Category</label>
+              <select id="cpCategory" onchange="populateCpItems()"></select>
+            </div>
+            <div>
+              <label data-i18n="item">Item</label>
+              <select id="cpItem"></select>
+            </div>
+            <div>
+              <label data-i18n="quantity">Quantity</label>
+              <input id="cpQty" type="number" min="1" step="1" value="1">
+            </div>
+          </div>
+          <label data-i18n="notes_optional">Notes (optional)</label>
+          <input id="cpNotes" placeholder="e.g. brand/model to be confirmed by client" data-i18n-ph="ph_cp_notes">
+          <div class="add-row"><button class="btn btn-dark" onclick="addCustomerPurchaseItem()" data-i18n="cp_add">+ Add to list</button></div>
+        </div>
+
         <!-- CUSTOM ITEM BOX — a single shared block, moved by JS into whichever tab (Cabinetry / Renovation & trades) is active,
              so a custom item added here is tagged as belonging to that section. -->
         <div id="customItemBox">
@@ -1067,7 +1094,13 @@
       </div>
 
       <div class="section">
-        <div class="section-head"><h2 data-i18n="sec_adjust">Adjustments &amp; terms</h2><span class="section-num">04</span></div>
+        <div class="section-head"><h2 data-i18n="sec_customer_purchase">Customer purchase items</h2><span class="section-num">04</span></div>
+        <div class="sub" data-i18n="sec_customer_purchase_hint">Reference only — not priced, not included in this quote's total.</div>
+        <div class="items-list" id="cpItemsList"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2 data-i18n="sec_adjust">Adjustments &amp; terms</h2><span class="section-num">05</span></div>
         <div class="grid3">
           <div>
             <label data-i18n="markup_pct">Price up (%)</label>
@@ -1131,7 +1164,7 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
       </div>
 
       <div class="section">
-        <div class="section-head"><h2 data-i18n="sec_payment">Payment terms</h2><span class="section-num">05</span></div>
+        <div class="section-head"><h2 data-i18n="sec_payment">Payment terms</h2><span class="section-num">06</span></div>
         <div class="rate-hint" data-i18n="payment_hint">Standard K-Wood schedule is pre-filled — adjust any percentage, edit the description, remove a phase, or add extra ones as the project needs.</div>
         <div id="paymentPhasesList"></div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
@@ -1141,7 +1174,7 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
       </div>
 
       <div class="section">
-        <div class="section-head"><h2 data-i18n="sec_renderings">Renderings &amp; design drawings</h2><span class="section-num">06</span></div>
+        <div class="section-head"><h2 data-i18n="sec_renderings">Renderings &amp; design drawings</h2><span class="section-num">07</span></div>
         <div class="rate-hint" data-i18n="renderings_hint">Upload renderings, design drawings, or reference photos. They'll appear on their own page(s) in the printed quotation, each with a name and description.</div>
 
         <label data-i18n="upload_image">Upload image</label>
@@ -1262,46 +1295,6 @@ Excluded: faucet, sink, Tiles, kitchen appliances</textarea>
       </div>
       <div id="myQuotesCards"></div>
     </div>
-  </div>
-
-  <!-- ================= APPLIANCES / CUSTOMER PURCHASE VIEW ================= -->
-  <div class="full-panel" id="appliancesView" style="display:none;">
-    <div class="panel-head">
-      <h2 data-i18n="appliances_page_title">Appliances / Customer purchase items</h2>
-    </div>
-    <div class="sub" data-i18n="appliances_page_hint">
-      Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range,
-      fridge, faucets). This list is for reference only — it does not affect this quote's pricing.
-    </div>
-    <div class="sub" id="appliancesQuoteContext" style="margin-top:6px; font-weight:600;"></div>
-
-    <div class="section" style="margin-top:16px; padding-top:16px;">
-      <div class="grid3">
-        <div>
-          <label data-i18n="category">Category</label>
-          <select id="cpCategory" onchange="populateCpItems()"></select>
-        </div>
-        <div>
-          <label data-i18n="item">Item</label>
-          <select id="cpItem"></select>
-        </div>
-        <div>
-          <label data-i18n="quantity">Quantity</label>
-          <input id="cpQty" type="number" min="1" step="1" value="1">
-        </div>
-      </div>
-      <label data-i18n="notes_optional">Notes (optional)</label>
-      <input id="cpNotes" placeholder="e.g. brand/model to be confirmed by client" data-i18n-ph="ph_cp_notes">
-      <div class="add-row"><button class="btn btn-dark" onclick="addCustomerPurchaseItem()" data-i18n="cp_add">+ Add to list</button></div>
-    </div>
-
-    <div class="items-list" id="cpItemsList" style="margin-top:18px;"></div>
-
-    <div class="add-row" style="margin-top:16px;">
-      <button class="btn btn-primary" onclick="saveQuoteFromAppliancesPage()" data-i18n="btn_save">Save quote</button>
-      <span class="sub" data-i18n="cp_save_hint" style="margin-left:10px;">Saves with the rest of this quote.</span>
-    </div>
-    <div id="cpSaveStatus" style="font-size:11.5px; margin-top:8px; display:none;"></div>
   </div>
 
   <!-- ================= ADMIN VIEW ================= -->
@@ -2441,15 +2434,11 @@ const translations = {
   nav_builder: { en: 'Quote Builder', zh: '報價製作' },
   nav_myquotes: { en: 'My Quotes', zh: '我的報價' },
   nav_appliances: { en: 'Appliances/Customer purchase', zh: '電器／客戶自購' },
-  appliances_page_title: { en: 'Appliances / Customer purchase items', zh: '電器／客戶自購項目' },
   appliances_page_hint: { en: 'Track appliances, fixtures, and finishes the client is sourcing on their own (e.g. range, fridge, faucets). This list is for reference only — it does not affect this quote\'s pricing.', zh: '記錄客戶自行購買的電器、配件與飾材（例如爐具、雪櫃、水龍頭）。此清單僅供參考，不會影響此報價的金額。' },
   ph_cp_notes: { en: 'e.g. brand/model to be confirmed by client', zh: '例如：品牌／型號待客戶確認' },
   cp_add: { en: '+ Add to list', zh: '+ 加入清單' },
-  cp_save_hint: { en: 'Saves with the rest of this quote.', zh: '將與此報價的其他內容一併儲存。' },
   cp_select_category: { en: '— Select category —', zh: '— 選擇類別 —' },
   cp_select_item: { en: '— Select item —', zh: '— 選擇項目 —' },
-  cp_for_quote: { en: 'For quote', zh: '所屬報價：' },
-  cp_for_quote_none: { en: 'This will be saved with your next new quote.', zh: '將與您下一份新報價一併儲存。' },
   cp_pick_both: { en: 'Choose a category and an item first.', zh: '請先選擇類別與項目。' },
   cp_empty: { en: 'No items added yet.', zh: '尚未加入任何項目。' },
   pricing_appliances_hint: { en: 'Names only, no pricing — these drive the Category / Item dropdowns on the "Appliances/Customer purchase" page.', zh: '僅需名稱，無需定價 — 用於「電器／客戶自購」頁面的類別／項目下拉選單。' },
@@ -2473,6 +2462,8 @@ const translations = {
   sec_details: { en: 'Quote details', zh: '報價資料' },
   sec_addline: { en: 'Add line item', zh: '新增項目' },
   sec_items: { en: 'Quote items', zh: '報價項目' },
+  sec_customer_purchase: { en: 'Customer purchase items', zh: '客戶自購項目' },
+  sec_customer_purchase_hint: { en: "Reference only — not priced, not included in this quote's total.", zh: '僅供參考 — 不計價，不計入此報價總額。' },
   sec_adjust: { en: 'Adjustments &amp; terms', zh: '調整與條款' },
   sec_payment: { en: 'Payment terms', zh: '付款條款' },
   sec_renderings: { en: 'Renderings &amp; design drawings', zh: '效果圖與設計圖' },
@@ -2950,11 +2941,9 @@ function setView(view){
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   $('builderView').style.display = view === 'builder' ? 'grid' : 'none';
   $('myQuotesView').style.display = view === 'myquotes' ? 'block' : 'none';
-  $('appliancesView').style.display = view === 'appliances' ? 'block' : 'none';
   $('adminView').style.display = view === 'admin' ? 'block' : 'none';
 
   if (view === 'myquotes') loadMyQuotes();
-  if (view === 'appliances') renderAppliancesPage();
   if (view === 'admin') setAdminSubTab(currentAdminSubTab);
 }
 
@@ -2981,16 +2970,6 @@ function populateCpItems(){
   sel.innerHTML = `<option value="">${t('cp_select_item')}</option>` +
     list.map(i => `<option value="${i.replace(/"/g,'&quot;')}">${i.replace(/</g,'&lt;')}</option>`).join('');
   sel.disabled = !cat;
-}
-
-function renderAppliancesPage(){
-  const quoteNum = $('quoteNum').value.trim();
-  const clientName = $('clientName').value.trim();
-  $('appliancesQuoteContext').textContent = quoteNum
-    ? `${t('cp_for_quote')} ${quoteNum}${clientName ? ' — ' + clientName : ''}`
-    : t('cp_for_quote_none');
-  populateCpCategories();
-  renderCustomerPurchaseList();
 }
 
 function addCustomerPurchaseItem(){
@@ -3026,15 +3005,6 @@ function renderCustomerPurchaseList(){
       </div>
       <button class="btn btn-danger btn-sm" onclick="removeCustomerPurchaseItem(${i})">${t('btn_remove')}</button>
     </div>`).join('');
-}
-
-async function saveQuoteFromAppliancesPage(){
-  await saveQuote(true);
-  const src = $('saveStatus');
-  const dst = $('cpSaveStatus');
-  dst.style.display = 'block';
-  dst.style.color = src.style.color;
-  dst.textContent = src.textContent;
 }
 
 function setPricingSubTab(tab){
@@ -4537,8 +4507,16 @@ function setItemType(type){
   currentType = type;
   $('tabCabinet').classList.toggle('active', type==='cabinet');
   $('tabTrade').classList.toggle('active', type==='trade');
+  $('tabAppliance').classList.toggle('active', type==='appliance');
   $('cabinetForm').style.display = type==='cabinet' ? 'block' : 'none';
   $('tradeForm').style.display = type==='trade' ? 'block' : 'none';
+  $('applianceForm').style.display = type==='appliance' ? 'block' : 'none';
+
+  if (type === 'appliance'){
+    populateCpCategories();
+    renderCustomerPurchaseList();
+    return;
+  }
 
   const box = $('customItemBox');
   if (type === 'cabinet'){
@@ -5324,6 +5302,7 @@ function removeItem(id){
 
 /* ================= render items list ================= */
 function renderItems(){
+  renderCustomerPurchaseList();
   const list = $('itemsList');
   $('itemCount').textContent = items.length ? `(${items.length})` : '';
 
