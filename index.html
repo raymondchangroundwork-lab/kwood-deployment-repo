@@ -1037,6 +1037,23 @@
               <input id="cpQty" type="number" min="1" step="1" value="1">
             </div>
           </div>
+          <div class="grid3">
+            <div>
+              <label data-i18n="cp_decision_by">Decision to be made by</label>
+              <input id="cpDecisionBy" type="date">
+            </div>
+            <div>
+              <label data-i18n="cp_deliver_date">Deliver date</label>
+              <input id="cpDeliverDate" type="date">
+            </div>
+            <div>
+              <label data-i18n="cp_deliver_to">Deliver to</label>
+              <select id="cpDeliverTo">
+                <option value="site" data-i18n="cp_deliver_site">Site</option>
+                <option value="kwood" data-i18n="cp_deliver_kwood">K-Wood</option>
+              </select>
+            </div>
+          </div>
           <label data-i18n="notes_optional">Notes (optional)</label>
           <input id="cpNotes" placeholder="e.g. brand/model to be confirmed by client" data-i18n-ph="ph_cp_notes">
           <div class="add-row"><button class="btn btn-dark" onclick="addCustomerPurchaseItem()" data-i18n="cp_add">+ Add to list</button></div>
@@ -2441,6 +2458,11 @@ const translations = {
   cp_select_item: { en: '— Select item —', zh: '— 選擇項目 —' },
   cp_pick_both: { en: 'Choose a category and an item first.', zh: '請先選擇類別與項目。' },
   cp_empty: { en: 'No items added yet.', zh: '尚未加入任何項目。' },
+  cp_decision_by: { en: 'Decision to be made by', zh: '需於此日期前決定' },
+  cp_deliver_date: { en: 'Deliver date', zh: '送貨日期' },
+  cp_deliver_to: { en: 'Deliver to', zh: '送貨地點' },
+  cp_deliver_site: { en: 'Site', zh: '工地' },
+  cp_deliver_kwood: { en: 'K-Wood', zh: 'K-Wood' },
   pricing_appliances_hint: { en: 'Names only, no pricing — these drive the Category / Item dropdowns on the "Appliances/Customer purchase" page.', zh: '僅需名稱，無需定價 — 用於「電器／客戶自購」頁面的類別／項目下拉選單。' },
   nav_admin: { en: 'Admin', zh: '管理' },
   logout: { en: 'Log out', zh: '登出' },
@@ -2977,11 +2999,17 @@ function addCustomerPurchaseItem(){
   const item = $('cpItem').value;
   const qty = parseFloat($('cpQty').value) || 1;
   const notes = $('cpNotes').value.trim();
+  const decisionBy = $('cpDecisionBy').value;
+  const deliverDate = $('cpDeliverDate').value;
+  const deliverTo = $('cpDeliverTo').value;
   if (!category || !item){ showAlert(t('cp_pick_both')); return; }
 
-  customerPurchaseItems.push({ category, item, qty, notes });
+  customerPurchaseItems.push({ category, item, qty, notes, decisionBy, deliverDate, deliverTo });
   $('cpNotes').value = '';
   $('cpQty').value = 1;
+  $('cpDecisionBy').value = '';
+  $('cpDeliverDate').value = '';
+  $('cpDeliverTo').value = 'site';
   renderCustomerPurchaseList();
 }
 
@@ -2990,21 +3018,37 @@ function removeCustomerPurchaseItem(idx){
   renderCustomerPurchaseList();
 }
 
+function cpFmtDate(s){
+  if (!s) return '';
+  const d = new Date(s + 'T00:00:00');
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function cpDeliverToLabel(v){
+  return v === 'kwood' ? t('cp_deliver_kwood') : t('cp_deliver_site');
+}
 function renderCustomerPurchaseList(){
   const wrap = $('cpItemsList');
   if (!customerPurchaseItems.length){
     wrap.innerHTML = `<div class="empty-state">${t('cp_empty')}</div>`;
     return;
   }
-  wrap.innerHTML = customerPurchaseItems.map((r, i) => `
+  wrap.innerHTML = customerPurchaseItems.map((r, i) => {
+    const details = [];
+    if (r.decisionBy) details.push(`${t('cp_decision_by')}: ${cpFmtDate(r.decisionBy)}`);
+    if (r.deliverDate) details.push(`${t('cp_deliver_date')}: ${cpFmtDate(r.deliverDate)}`);
+    details.push(`${t('cp_deliver_to')}: ${cpDeliverToLabel(r.deliverTo)}`);
+    return `
     <div class="item-row">
       <div>
         <div class="grp">${(r.category||'').replace(/</g,'&lt;')}</div>
         <div class="desc">${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}</div>
+        <div class="meta">${details.join(' · ')}</div>
         ${r.notes ? `<div class="meta">${r.notes.replace(/</g,'&lt;')}</div>` : ''}
       </div>
       <button class="btn btn-danger btn-sm" onclick="removeCustomerPurchaseItem(${i})">${t('btn_remove')}</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function setPricingSubTab(tab){
@@ -5507,8 +5551,9 @@ function renderQuote(){
   page1Blocks.push(signBlock);
   blockGroups.push({ forceNewPage: false, blocks: page1Blocks, headerHtml: docHeadBlock });
 
-  // Customer-purchased items get their own page, grouped by zone (like Summary by area) so the
-  // client can see at a glance what they still need to buy for each room — never priced.
+  // Customer-purchased items get their own page: a detail table grouped by zone (like the
+  // itemized breakdown's per-group tables) so the client sees exactly what they need to buy,
+  // by when, delivered where — never priced.
   if (customerPurchaseItems.length){
     const cpByZone = {};
     const cpZoneOrder = [];
@@ -5517,26 +5562,27 @@ function renderQuote(){
       if (!(zone in cpByZone)){ cpByZone[zone] = []; cpZoneOrder.push(zone); }
       cpByZone[zone].push(r);
     });
-    const cpBlocks = [
-      `<div class="render-page-title">Customer-purchased items — by zone</div>`,
-      `<div class="doc-notes" style="margin-top:0;">Reference only — the client is sourcing these on their own; not included in this quote's pricing.</div>`
-    ];
-    cpZoneOrder.forEach((zone, zi) => {
+    const cpDeliverLabel = v => v === 'kwood' ? 'K-Wood' : 'Site';
+    const cpRowHtml = r => `
+      <tr class="item-tr">
+        <td><div class="item-name">${(r.item||'').replace(/</g,'&lt;')}</div>${r.notes ? `<div class="item-sub">${r.notes.replace(/</g,'&lt;')}</div>` : ''}</td>
+        <td class="num">${r.qty}</td>
+        <td>${r.decisionBy ? fmtDate(r.decisionBy) : '—'}</td>
+        <td>${r.deliverDate ? fmtDate(r.deliverDate) : '—'}</td>
+        <td>${cpDeliverLabel(r.deliverTo)}</td>
+      </tr>`;
+    const cpTableBlocks = cpZoneOrder.map((zone, zi) => {
       const areaNum = String(zi + 1).padStart(2, '0');
-      const rows = cpByZone[zone];
-      cpBlocks.push(`
-        <div class="zone-summary" style="margin-top:14px;">
-          <div class="zone-block">
-            <div class="zs-row">
-              <span class="zs-name">${areaNum} — ${zone.replace(/</g,'&lt;')}</span>
-              <span class="zs-amt">${rows.length} item${rows.length > 1 ? 's' : ''}</span>
-            </div>
-            <ul class="zs-bullets">
-              ${rows.map(r => `<li>${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}${r.notes ? ' — ' + r.notes.replace(/</g,'&lt;') : ''}</li>`).join('')}
-            </ul>
-          </div>
-        </div>`);
+      const thead = zi === 0
+        ? `<thead><tr><th>Item</th><th class="num">Qty</th><th>Decision by</th><th>Deliver date</th><th>Deliver to</th></tr></thead>`
+        : '';
+      return `<table class="doc-table">${thead}<tbody><tr class="grp-row"><td colspan="5">${areaNum} — ${zone.replace(/</g,'&lt;')}</td></tr>${cpByZone[zone].map(cpRowHtml).join('')}</tbody></table>`;
     });
+    const cpBlocks = [
+      `<div class="render-page-title">Customer-purchased items</div>`,
+      `<div class="doc-notes" style="margin-top:0;">Reference only — the client is sourcing these on their own; not included in this quote's pricing.</div>`,
+      ...cpTableBlocks
+    ];
     blockGroups.push({ forceNewPage: true, blocks: cpBlocks, headerHtml: docHeadBlock });
   }
 
