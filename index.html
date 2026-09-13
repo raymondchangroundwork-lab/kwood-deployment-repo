@@ -172,6 +172,8 @@
   .item-row .grp{ font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:var(--oak); font-weight:700; margin-bottom:2px; }
   .item-row .amt{ font-family:'Zilla Slab',serif; font-size:15px; color:var(--graphite); white-space:nowrap; }
   .item-actions{ display:flex; gap:6px; }
+  .items-group-head{ font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:var(--oak); font-weight:700; margin:4px 0 -2px; }
+  .items-group-head:first-child{ margin-top:0; }
   .empty-state{ font-size:13px; color:var(--pencil); font-style:italic; padding:14px 0; }
 
   /* ---------- Admin panel ---------- */
@@ -699,6 +701,90 @@
 
     <div class="modal-actions">
       <button class="btn btn-primary" id="drawingModalDoneBtn" data-i18n="btn_done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT QUOTE ITEM (cabinet / trade / custom line already added) ================= -->
+<div class="modal-overlay" id="editItemModal" style="display:none;">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-message" style="font-weight:700; margin-bottom:2px;" data-i18n="edit_item_title">Edit item</div>
+    <div class="sub" style="margin-bottom:14px;" data-i18n="edit_item_hint">Changes recalculate this line's total; the catalog rate itself is unaffected.</div>
+
+    <label data-i18n="zone_area_name">Zone / area name</label>
+    <input id="editItemZone">
+    <label data-i18n="description">Description</label>
+    <input id="editItemTitle">
+    <div class="grid3">
+      <div>
+        <label data-i18n="quantity">Quantity</label>
+        <input id="editItemQty" type="number" min="0" step="0.01" oninput="updateEditItemLineTotal()">
+      </div>
+      <div>
+        <label data-i18n="unit">Unit</label>
+        <input id="editItemUnit">
+      </div>
+      <div>
+        <label data-i18n="unit_price">Unit price ($)</label>
+        <input id="editItemRate" type="number" min="0" step="0.01" oninput="updateEditItemLineTotal()">
+      </div>
+    </div>
+    <label data-i18n="notes_optional">Notes (optional)</label>
+    <input id="editItemNotes">
+    <div class="line-total">
+      <span data-i18n="line_total">Line total</span>
+      <strong id="editItemLineTotal">$0.00</strong>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="editItemCancelBtn" style="border-color:var(--paper-line); color:var(--pencil);" data-i18n="btn_cancel">Cancel</button>
+      <button class="btn btn-primary" id="editItemSaveBtn" data-i18n="btn_save_changes">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT CUSTOMER PURCHASE ITEM ================= -->
+<div class="modal-overlay" id="editCpModal" style="display:none;">
+  <div class="modal-box" style="max-width:460px;">
+    <div class="modal-message" style="font-weight:700; margin-bottom:2px;" data-i18n="edit_cp_title">Edit customer purchase item</div>
+
+    <div class="grid3">
+      <div>
+        <label data-i18n="category">Category</label>
+        <select id="editCpCategory" onchange="populateEditCpItems()"></select>
+      </div>
+      <div>
+        <label data-i18n="item">Item</label>
+        <select id="editCpItem"></select>
+      </div>
+      <div>
+        <label data-i18n="quantity">Quantity</label>
+        <input id="editCpQty" type="number" min="1" step="1">
+      </div>
+    </div>
+    <div class="grid3">
+      <div>
+        <label data-i18n="cp_decision_by">Decision to be made by</label>
+        <input id="editCpDecisionBy" type="date">
+      </div>
+      <div>
+        <label data-i18n="cp_deliver_date">Deliver date</label>
+        <input id="editCpDeliverDate" type="date">
+      </div>
+      <div>
+        <label data-i18n="cp_deliver_to">Deliver to</label>
+        <select id="editCpDeliverTo">
+          <option value="site" data-i18n="cp_deliver_site">Site</option>
+          <option value="kwood" data-i18n="cp_deliver_kwood">K-Wood</option>
+        </select>
+      </div>
+    </div>
+    <label data-i18n="notes_optional">Notes (optional)</label>
+    <input id="editCpNotes">
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="editCpCancelBtn" style="border-color:var(--paper-line); color:var(--pencil);" data-i18n="btn_cancel">Cancel</button>
+      <button class="btn btn-primary" id="editCpSaveBtn" data-i18n="btn_save_changes">Save changes</button>
     </div>
   </div>
 </div>
@@ -2677,6 +2763,9 @@ const translations = {
   upload_docs: { en: "Upload supporting documents", zh: "上傳支持文件" },
   purchase_needs_name: { en: "Enter a name for this purchase.", zh: "請輸入此採購項目的名稱。" },
   btn_edit: { en: "Edit", zh: "編輯" },
+  edit_item_title: { en: "Edit item", zh: "編輯項目" },
+  edit_item_hint: { en: "Changes recalculate this line's total; the catalog rate itself is unaffected.", zh: "變更會重新計算此項目小計，並不會影響目錄中的原始費率。" },
+  edit_cp_title: { en: "Edit customer purchase item", zh: "編輯客戶自購項目" },
   edit_purchase_for: { en: "Edit purchase record —", zh: "編輯採購紀錄 —" },
   btn_drawing: { en: "Drawing", zh: "圖片" },
   drawing_modal_title: { en: "Renderings &amp; design drawings", zh: "效果圖與設計圖" },
@@ -3020,6 +3109,51 @@ function removeCustomerPurchaseItem(idx){
   renderQuote();
 }
 
+let editCpTargetIdx = null;
+function populateEditCpItems(){
+  const sel = $('editCpItem');
+  const cat = $('editCpCategory').value;
+  const list = appliancesCatalog[cat] || [];
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">${t('cp_select_item')}</option>` +
+    list.map(i => `<option value="${i.replace(/"/g,'&quot;')}">${i.replace(/</g,'&lt;')}</option>`).join('');
+  if (list.includes(prev)) sel.value = prev;
+}
+function openEditCpModal(idx){
+  const r = customerPurchaseItems[idx];
+  if (!r) return;
+  editCpTargetIdx = idx;
+  const cats = Object.keys(appliancesCatalog);
+  $('editCpCategory').innerHTML = cats.map(c => `<option value="${c.replace(/"/g,'&quot;')}">${c.replace(/</g,'&lt;')}</option>`).join('');
+  $('editCpCategory').value = r.category;
+  populateEditCpItems();
+  $('editCpItem').value = r.item;
+  $('editCpQty').value = r.qty;
+  $('editCpDecisionBy').value = r.decisionBy || '';
+  $('editCpDeliverDate').value = r.deliverDate || '';
+  $('editCpDeliverTo').value = r.deliverTo || 'site';
+  $('editCpNotes').value = r.notes || '';
+  $('editCpModal').style.display = 'flex';
+}
+$('editCpCancelBtn').addEventListener('click', () => { $('editCpModal').style.display = 'none'; });
+$('editCpSaveBtn').addEventListener('click', () => {
+  const r = customerPurchaseItems[editCpTargetIdx];
+  if (!r) return;
+  const category = $('editCpCategory').value;
+  const item = $('editCpItem').value;
+  if (!category || !item){ showAlert(t('cp_pick_both')); return; }
+  r.category = category;
+  r.item = item;
+  r.qty = parseFloat($('editCpQty').value) || 1;
+  r.decisionBy = $('editCpDecisionBy').value;
+  r.deliverDate = $('editCpDeliverDate').value;
+  r.deliverTo = $('editCpDeliverTo').value;
+  r.notes = $('editCpNotes').value.trim();
+  $('editCpModal').style.display = 'none';
+  renderCustomerPurchaseList();
+  renderQuote();
+});
+
 function cpFmtDate(s){
   if (!s) return '';
   const d = new Date(s + 'T00:00:00');
@@ -3035,22 +3169,38 @@ function renderCustomerPurchaseList(){
     wrap.innerHTML = `<div class="empty-state">${t('cp_empty')}</div>`;
     return;
   }
-  wrap.innerHTML = customerPurchaseItems.map((r, i) => {
-    const details = [];
-    if (r.decisionBy) details.push(`${t('cp_decision_by')}: ${cpFmtDate(r.decisionBy)}`);
-    if (r.deliverDate) details.push(`${t('cp_deliver_date')}: ${cpFmtDate(r.deliverDate)}`);
-    details.push(`${t('cp_deliver_to')}: ${cpDeliverToLabel(r.deliverTo)}`);
-    return `
-    <div class="item-row">
-      <div>
-        <div class="grp">${(r.category||'').replace(/</g,'&lt;')}</div>
-        <div class="desc">${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}</div>
-        <div class="meta">${details.join(' · ')}</div>
-        ${r.notes ? `<div class="meta">${r.notes.replace(/</g,'&lt;')}</div>` : ''}
-      </div>
-      <button class="btn btn-danger btn-sm" onclick="removeCustomerPurchaseItem(${i})">${t('btn_remove')}</button>
-    </div>`;
-  }).join('');
+
+  // auto-group by zone/category, regardless of add order, mirroring Quote items' grouping
+  const byGroup = {};
+  const groupOrder = [];
+  customerPurchaseItems.forEach((r, i) => {
+    const g = r.category || 'Other';
+    if (!(g in byGroup)){ byGroup[g] = []; groupOrder.push(g); }
+    byGroup[g].push(i); // keep the original array index for edit/remove
+  });
+
+  wrap.innerHTML = groupOrder.map(g => `
+    <div class="items-group-head">${g.replace(/</g,'&lt;')}</div>
+    ${byGroup[g].map(i => {
+      const r = customerPurchaseItems[i];
+      const details = [];
+      if (r.decisionBy) details.push(`${t('cp_decision_by')}: ${cpFmtDate(r.decisionBy)}`);
+      if (r.deliverDate) details.push(`${t('cp_deliver_date')}: ${cpFmtDate(r.deliverDate)}`);
+      details.push(`${t('cp_deliver_to')}: ${cpDeliverToLabel(r.deliverTo)}`);
+      return `
+      <div class="item-row">
+        <div>
+          <div class="desc">${(r.item||'').replace(/</g,'&lt;')}${r.qty > 1 ? ' × ' + r.qty : ''}</div>
+          <div class="meta">${details.join(' · ')}</div>
+          ${r.notes ? `<div class="meta">${r.notes.replace(/</g,'&lt;')}</div>` : ''}
+        </div>
+        <div class="item-actions" style="display:flex; align-items:center; gap:10px;">
+          <button class="btn btn-outline btn-sm" onclick="openEditCpModal(${i})">${t('btn_edit')}</button>
+          <button class="btn btn-danger btn-sm" onclick="removeCustomerPurchaseItem(${i})">${t('btn_remove')}</button>
+        </div>
+      </div>`;
+    }).join('')}
+  `).join('');
 }
 
 function setPricingSubTab(tab){
@@ -5346,6 +5496,55 @@ function removeItem(id){
   renderItems(); renderQuote();
 }
 
+/* ================= edit an already-added quote item =================
+   Generic — works the same whether the line came from the cabinet catalog, the trade catalog,
+   or a custom item, since by the time it's added it's just a priced title/qty/unit/rate line.
+   Editing doesn't re-look-up catalog rates; it edits the snapshotted values directly. */
+let editItemTargetId = null;
+
+function openEditItemModal(id){
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  editItemTargetId = id;
+  $('editItemZone').value = item.group || '';
+  $('editItemTitle').value = item.title || '';
+  $('editItemQty').value = item.qty;
+  $('editItemUnit').value = item.unit || '';
+  $('editItemRate').value = item.rate;
+  $('editItemNotes').value = item.cabNotes || '';
+  updateEditItemLineTotal();
+  $('editItemModal').style.display = 'flex';
+}
+function updateEditItemLineTotal(){
+  const qty = parseFloat($('editItemQty').value) || 0;
+  const rate = parseFloat($('editItemRate').value) || 0;
+  $('editItemLineTotal').textContent = money(qty * rate);
+}
+$('editItemCancelBtn').addEventListener('click', () => { $('editItemModal').style.display = 'none'; });
+$('editItemSaveBtn').addEventListener('click', () => {
+  const item = items.find(i => i.id === editItemTargetId);
+  if (!item) return;
+  const zone = $('editItemZone').value.trim() || item.group;
+  const title = $('editItemTitle').value.trim() || item.title;
+  const qty = parseFloat($('editItemQty').value) || 0;
+  const unit = $('editItemUnit').value.trim() || item.unit;
+  const rate = parseFloat($('editItemRate').value) || 0;
+  const notes = $('editItemNotes').value.trim();
+
+  item.group = zone;
+  item.title = title;
+  item.qty = qty;
+  item.unit = unit;
+  item.rate = rate;
+  item.total = qty * rate;
+  item.cabNotes = notes;
+  item.sub = `${qty} ${unit} × ${money(rate)}` + (notes ? ` · ${notes}` : '');
+
+  $('editItemModal').style.display = 'none';
+  refreshZoneSuggestions();
+  renderItems(); renderQuote();
+});
+
 /* ================= render items list ================= */
 function renderItems(){
   renderCustomerPurchaseList();
@@ -5375,18 +5574,31 @@ function renderItems(){
     list.innerHTML = `<div class="empty-state">${t('empty_items')}</div>`;
     return;
   }
-  list.innerHTML = items.map(i => `
-    <div class="item-row">
-      <div>
-        <div class="grp">${i.group}</div>
-        <div class="desc">${i.title}</div>
-        <div class="meta">${i.sub}</div>
-      </div>
-      <div class="item-actions" style="display:flex; align-items:center; gap:10px;">
-        <div class="amt">${money(i.total)}</div>
-        <button class="btn btn-danger btn-sm" onclick="removeItem(${i.id})">${t('btn_remove')}</button>
-      </div>
-    </div>
+
+  // auto-group by zone, regardless of the order items were added in, so items sharing a zone
+  // always render together (first-seen zone order is preserved)
+  const byGroup = {};
+  const groupOrder = [];
+  items.forEach(i => {
+    const g = i.group || 'Other';
+    if (!(g in byGroup)){ byGroup[g] = []; groupOrder.push(g); }
+    byGroup[g].push(i);
+  });
+
+  list.innerHTML = groupOrder.map(g => `
+    <div class="items-group-head">${(g || '').replace(/</g,'&lt;')}</div>
+    ${byGroup[g].map(i => `
+      <div class="item-row">
+        <div>
+          <div class="desc">${i.title}</div>
+          <div class="meta">${i.sub}</div>
+        </div>
+        <div class="item-actions" style="display:flex; align-items:center; gap:10px;">
+          <div class="amt">${money(i.total)}</div>
+          <button class="btn btn-outline btn-sm" onclick="openEditItemModal(${i.id})">${t('btn_edit')}</button>
+          <button class="btn btn-danger btn-sm" onclick="removeItem(${i.id})">${t('btn_remove')}</button>
+        </div>
+      </div>`).join('')}
   `).join('');
 }
 
