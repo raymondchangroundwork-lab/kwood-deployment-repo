@@ -899,6 +899,7 @@
         <div class="toggle-row">
           <div class="toggle-btn active" id="tabCabinet" onclick="setItemType('cabinet')" data-i18n="tab_cabinet">Cabinetry</div>
           <div class="toggle-btn" id="tabTrade" onclick="setItemType('trade')" data-i18n="tab_trade">Renovation &amp; trades</div>
+          <div class="toggle-btn" id="tabAppliance" onclick="setItemType('appliance')" data-i18n="tab_appliance">Appliances</div>
         </div>
 
         <div class="quote-progress" id="quoteProgress" data-i18n="quote_progress_hint">No items yet — fill in the form below, then click <strong>+ Add item</strong>. You can add as many items as you need; each one stacks into the same quotation.</div>
@@ -1013,6 +1014,11 @@
           </div>
           <div class="add-row"><button class="btn btn-dark" onclick="addTradeItem()" data-i18n="btn_add_item">+ Add item</button></div>
         </div>
+
+        <!-- APPLIANCES FORM — no catalog of its own; it's just a home for the shared custom item
+             box below, so one-off appliance lines (fridge, range, dishwasher, etc.) group under
+             their own "Appliances" section instead of Cabinetry or Custom / Other. -->
+        <div id="applianceForm" style="display:none;"></div>
 
         <!-- CUSTOM ITEM BOX — a single shared block, moved by JS into whichever tab (Cabinetry / Renovation & trades) is active,
              so a custom item added here is tagged as belonging to that section. -->
@@ -2389,6 +2395,7 @@ const translations = {
 
   tab_cabinet: { en: 'Cabinetry', zh: '櫥櫃' },
   tab_trade: { en: 'Renovation &amp; trades', zh: '裝修與工程' },
+  tab_appliance: { en: 'Appliances', zh: '電器' },
 
   myquotes_title: { en: 'My Quotes', zh: '我的報價' },
   admin_title: { en: 'Admin', zh: '管理' },
@@ -2511,6 +2518,7 @@ const translations = {
   add_custom_item: { en: "+ Add a custom item", zh: "+ 新增自訂項目" },
   added_to_zone: { en: "Added to this cabinetry zone", zh: "將加入此櫃體區域" },
   added_to_trades: { en: "Added to Renovation & trades", zh: "將加入裝修與工程" },
+  added_to_appliances: { en: "Added to Appliances", zh: "將加入電器" },
   round_total: { en: "Round total", zh: "總額進位" },
   round_none: { en: "No rounding", zh: "不進位" },
   round_up: { en: "Round up", zh: "無條件進位" },
@@ -2618,7 +2626,8 @@ function applyLanguage(lang){
     if (typeof renderItems === 'function') renderItems();
     if (typeof renderPaymentPhases === 'function' && paymentPhases.length) renderPaymentPhases();
     if (typeof currentType !== 'undefined'){
-      $('customContextHint').textContent = currentType === 'cabinet' ? t('added_to_zone') : t('added_to_trades');
+      $('customContextHint').textContent = currentType === 'cabinet' ? t('added_to_zone')
+        : currentType === 'appliance' ? t('added_to_appliances') : t('added_to_trades');
     }
     if (typeof populateCabSubtypes === 'function') populateCabSubtypes();
     if (typeof populateCountertopOptions === 'function') populateCountertopOptions();
@@ -4301,14 +4310,20 @@ function setItemType(type){
   currentType = type;
   $('tabCabinet').classList.toggle('active', type==='cabinet');
   $('tabTrade').classList.toggle('active', type==='trade');
+  $('tabAppliance').classList.toggle('active', type==='appliance');
   $('cabinetForm').style.display = type==='cabinet' ? 'block' : 'none';
   $('tradeForm').style.display = type==='trade' ? 'block' : 'none';
+  $('applianceForm').style.display = type==='appliance' ? 'block' : 'none';
 
   const box = $('customItemBox');
   if (type === 'cabinet'){
     $('cabinetForm').appendChild(box);
     $('customContextHint').textContent = t('added_to_zone');
     $('customZone').value = $('cabZone').value;
+  } else if (type === 'appliance'){
+    $('applianceForm').appendChild(box);
+    $('customContextHint').textContent = t('added_to_appliances');
+    $('customZone').value = 'Appliances';
   } else {
     $('tradeForm').appendChild(box);
     $('customContextHint').textContent = t('added_to_trades');
@@ -5053,6 +5068,10 @@ async function addCustomItem(){
     // recognized as a cabinetry item — joins the zone entered in this box, same as cabinet/countertop lines
     group = $('customZone').value.trim() || 'Cabinetry';
     sortBucket = 0;
+  } else if (currentType === 'appliance'){
+    // recognized as an appliance item — joins the zone entered in this box, defaulting to its own section
+    group = $('customZone').value.trim() || 'Appliances';
+    sortBucket = 50;
   } else {
     // recognized as a Renovation & trades item
     group = 'Custom / Other';
