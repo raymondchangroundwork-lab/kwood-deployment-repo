@@ -1485,6 +1485,93 @@ let paymentPhases = [];      // [{ pct, desc }, ...] — editable payment schedu
 
 const USERS_PREFIX = 'users:';
 const QUOTES_PREFIX = 'quotes:';
+
+/* ================= DEMO MODE (public GitHub Pages build only) =================
+   GitHub Pages can't run the real Node/Express/SQLite backend. This same index.html is
+   also used as the private, real localhost app, so rather than maintaining a second copy
+   of the frontend, it detects its own environment: on localhost the real backend is used
+   exactly as before; anywhere else (i.e. the public static deployment) it falls back to a
+   frontend-only demo — two hardcoded demo accounts, session + data kept in localStorage
+   only. Demo mode never calls the real API, never touches the real database, and starts
+   with none of the real business data. */
+const DEMO_MODE = !['localhost', '127.0.0.1'].includes(location.hostname);
+const DEMO_ACCOUNTS = {
+  admin: { password: 'demo123', role: 'admin', name: 'Demo Admin' },
+  sales: { password: 'sales123', role: 'sales', name: 'Demo Salesperson' }
+};
+const DEMO_SESSION_KEY = 'kwood_demo_session';
+const DEMO_STORAGE_PREFIX = 'kwood_demo_storage:';
+
+function demoCanSeeQuote(rawValue){
+  if (!currentUser) return false;
+  if (isReviewer(currentUser.role)) return true;
+  try {
+    const record = JSON.parse(rawValue);
+    return record.createdBy === currentUser.username || record.appointedSalesUsername === currentUser.username;
+  } catch(e){ return false; }
+}
+function demoCanWriteQuote(existingRaw, incomingValue){
+  if (!currentUser) return false;
+  if (currentUser.role === 'admin') return true;
+  if (existingRaw){
+    try {
+      const existing = JSON.parse(existingRaw);
+      return existing.createdBy === currentUser.username || existing.appointedSalesUsername === currentUser.username;
+    } catch(e){ return false; }
+  }
+  return incomingValue.createdBy === currentUser.username || incomingValue.appointedSalesUsername === currentUser.username;
+}
+function demoStorageGet(key){
+  try {
+    const raw = localStorage.getItem(DEMO_STORAGE_PREFIX + key);
+    if (raw && key.startsWith(QUOTES_PREFIX) && !demoCanSeeQuote(raw)) return null;
+    return raw;
+  } catch(e){ return null; }
+}
+function demoStorageSet(key, value){
+  try {
+    if (key.startsWith(QUOTES_PREFIX)){
+      const existingRaw = localStorage.getItem(DEMO_STORAGE_PREFIX + key);
+      if (!demoCanWriteQuote(existingRaw, value)) return false;
+    }
+    localStorage.setItem(DEMO_STORAGE_PREFIX + key, JSON.stringify(value));
+    return true;
+  } catch(e){ return false; }
+}
+function demoStorageDelete(key){
+  try {
+    if (key.startsWith(QUOTES_PREFIX)){
+      const existingRaw = localStorage.getItem(DEMO_STORAGE_PREFIX + key);
+      if (existingRaw && !demoCanWriteQuote(existingRaw, {})) return false;
+    }
+    localStorage.removeItem(DEMO_STORAGE_PREFIX + key);
+    return true;
+  } catch(e){ return false; }
+}
+function demoStorageListKeys(prefix){
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(DEMO_STORAGE_PREFIX)) continue;
+      const bare = k.slice(DEMO_STORAGE_PREFIX.length);
+      if (!bare.startsWith(prefix)) continue;
+      if (bare.startsWith(QUOTES_PREFIX) && !demoCanSeeQuote(localStorage.getItem(k))) continue;
+      keys.push(bare);
+    }
+    return keys;
+  } catch(e){ return []; }
+}
+function showDemoBanner(){
+  const card = document.querySelector('#loginScreen .login-card');
+  if (!card || document.getElementById('demoModeBanner')) return;
+  const el = document.createElement('div');
+  el.id = 'demoModeBanner';
+  el.style.cssText = 'background:#fff3cd; color:#7a5b00; border:1px solid #f0d98c; border-radius:6px; padding:8px 12px; margin-bottom:14px; font-size:13px; text-align:center; line-height:1.5;';
+  el.innerHTML = '<strong>Demo mode</strong> — frontend-only prototype, no real data.<br>Try <code>admin / demo123</code> or <code>sales / sales123</code>.';
+  const logo = document.getElementById('logoLogin');
+  card.insertBefore(el, logo ? logo.nextSibling : card.firstChild);
+}
 const DEFAULT_STD_NOTES = "All cabinets come with a 5-year manufacturer's warranty\nAll hinges and drawer tracks were upgraded to soft closing\nExcluded: faucet, sink, Tiles, kitchen appliances";
 function buildDefaultPaymentMethod(){
   const ownerName = currentUser ? (currentUser.name || currentUser.username) : "(set your name in Admin → Users)";
@@ -2096,6 +2183,7 @@ $('itemModalSaveBtn').addEventListener('click', async () => {
    Claude artifact storage to the local Node/SQLite backend needed no changes anywhere else.
    The backend enforces auth and per-role permissions server-side based on the key's prefix. */
 async function storageGet(key, shared){
+  if (DEMO_MODE) return demoStorageGet(key);
   try {
     const res = await fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, { credentials: 'include' });
     if (!res.ok) return null;
@@ -2104,6 +2192,7 @@ async function storageGet(key, shared){
   } catch(e){ return null; }
 }
 async function storageSet(key, value, shared){
+  if (DEMO_MODE) return demoStorageSet(key, value);
   const attempt = () => fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -2123,12 +2212,14 @@ async function storageSet(key, value, shared){
   }
 }
 async function storageDelete(key, shared){
+  if (DEMO_MODE) return demoStorageDelete(key);
   try {
     const res = await fetch(`/api/storage/item?key=${encodeURIComponent(key)}`, { method: 'DELETE', credentials: 'include' });
     return res.ok;
   } catch(e){ return false; }
 }
 async function storageListKeys(prefix, shared){
+  if (DEMO_MODE) return demoStorageListKeys(prefix);
   try {
     const res = await fetch(`/api/storage/list?prefix=${encodeURIComponent(prefix)}`, { credentials: 'include' });
     if (!res.ok) return [];
@@ -2552,10 +2643,14 @@ function toggleLanguage(){
 }
 
 async function boot(){
-  const backendOk = await checkStorageAvailable();
-  if (!backendOk){
-    showStorageUnavailableScreen();
-    return;
+  if (DEMO_MODE){
+    showDemoBanner();
+  } else {
+    const backendOk = await checkStorageAvailable();
+    if (!backendOk){
+      showStorageUnavailableScreen();
+      return;
+    }
   }
 
   await loadPricingData();
@@ -2566,6 +2661,16 @@ async function boot(){
   $('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   $('logoutBtn').addEventListener('click', doLogout);
+
+  if (DEMO_MODE){
+    // Demo session lives only in this browser's localStorage — never a real server session.
+    const raw = localStorage.getItem(DEMO_SESSION_KEY);
+    if (raw){
+      try { await completeLogin(JSON.parse(raw)); }
+      catch(e){ localStorage.removeItem(DEMO_SESSION_KEY); }
+    }
+    return;
+  }
 
   // Sessions are now real, cookie-backed server sessions — resume one if it's still valid
   // (e.g. after a page refresh) instead of forcing a fresh login every time.
@@ -2621,7 +2726,7 @@ async function completeLogin(user){
   $('appShell').style.display = 'flex';
   $('userAvatar').textContent = (user.name || user.username).slice(0,1).toUpperCase();
   $('userName').textContent = user.name || user.username;
-  $('userRole').textContent = user.role;
+  $('userRole').textContent = user.role + (DEMO_MODE ? ' (Demo)' : '');
   $('navAdminTab').style.display = user.role === 'admin' ? 'block' : 'none';
   $('ongoingToggleBtn').style.display = isReviewer(user.role) ? 'inline-block' : 'none';
   $('perfToggleBtn').style.display = isReviewer(user.role) ? 'inline-block' : 'none';
@@ -2635,6 +2740,21 @@ async function doLogin(){
   const uname = $('loginUsername').value.trim().toLowerCase();
   const pwd = $('loginPassword').value;
   if (!uname || !pwd){ showLoginError('Enter a username and password.'); return; }
+
+  if (DEMO_MODE){
+    const acct = DEMO_ACCOUNTS[uname];
+    if (!acct || acct.password !== pwd){
+      showLoginError('Incorrect demo username or password.');
+      return;
+    }
+    const user = {
+      username: uname, name: acct.name, role: acct.role,
+      email: '', phone: '', poCode: '', isActive: true, createdAt: new Date().toISOString()
+    };
+    localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(user));
+    await completeLogin(user);
+    return;
+  }
 
   $('loginBtn').textContent = 'Signing in…';
   let res, body;
@@ -2658,9 +2778,13 @@ async function doLogin(){
 }
 
 async function doLogout(){
-  try {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-  } catch(e){ /* clear the local UI regardless of whether the network call succeeded */ }
+  if (DEMO_MODE){
+    localStorage.removeItem(DEMO_SESSION_KEY);
+  } else {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch(e){ /* clear the local UI regardless of whether the network call succeeded */ }
+  }
   currentUser = null;
   items = [];
   currentQuoteId = null;
@@ -2688,6 +2812,12 @@ $('changePasswordCancelBtn').addEventListener('click', closeChangePasswordModal)
 $('changePasswordSaveBtn').addEventListener('click', async () => {
   const errEl = $('changePasswordError');
   errEl.classList.remove('show');
+
+  if (DEMO_MODE){
+    errEl.textContent = 'Password changes are not available in the demo.';
+    errEl.classList.add('show');
+    return;
+  }
 
   const currentPassword = $('changePasswordCurrent').value;
   const newPassword = $('changePasswordNew').value;
