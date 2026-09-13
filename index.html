@@ -1562,16 +1562,6 @@ function demoStorageListKeys(prefix){
     return keys;
   } catch(e){ return []; }
 }
-function showDemoBanner(){
-  const card = document.querySelector('#loginScreen .login-card');
-  if (!card || document.getElementById('demoModeBanner')) return;
-  const el = document.createElement('div');
-  el.id = 'demoModeBanner';
-  el.style.cssText = 'background:#fff3cd; color:#7a5b00; border:1px solid #f0d98c; border-radius:6px; padding:8px 12px; margin-bottom:14px; font-size:13px; text-align:center; line-height:1.5;';
-  el.innerHTML = '<strong>Demo mode</strong> — frontend-only prototype, no real data.<br>Try <code>admin / demo123</code> or <code>sales / sales123</code>.';
-  const logo = document.getElementById('logoLogin');
-  card.insertBefore(el, logo ? logo.nextSibling : card.firstChild);
-}
 const DEFAULT_STD_NOTES = "All cabinets come with a 5-year manufacturer's warranty\nAll hinges and drawer tracks were upgraded to soft closing\nExcluded: faucet, sink, Tiles, kitchen appliances";
 function buildDefaultPaymentMethod(){
   const ownerName = currentUser ? (currentUser.name || currentUser.username) : "(set your name in Admin → Users)";
@@ -2643,9 +2633,7 @@ function toggleLanguage(){
 }
 
 async function boot(){
-  if (DEMO_MODE){
-    showDemoBanner();
-  } else {
+  if (!DEMO_MODE){
     const backendOk = await checkStorageAvailable();
     if (!backendOk){
       showStorageUnavailableScreen();
