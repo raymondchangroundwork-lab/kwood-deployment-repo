@@ -769,6 +769,11 @@
     </div>
     <label data-i18n="cp_custom_item">Or type a custom item</label>
     <input id="editCpCustomItem" placeholder="e.g. Wine fridge" data-i18n-ph="ph_cp_custom_item" oninput="if(this.value) document.getElementById('editCpItem').value=''">
+    <label data-i18n="cp_purchase_by">Purchase by</label>
+    <select id="editCpPurchaseBy">
+      <option value="kwood" data-i18n="cp_purchase_kwood">Through K-Wood</option>
+      <option value="client" data-i18n="cp_purchase_client">By client</option>
+    </select>
     <div class="grid3">
       <div>
         <label data-i18n="cp_decision_by">Decision to be made by</label>
@@ -1138,6 +1143,11 @@
           </div>
           <label data-i18n="cp_custom_item">Or type a custom item</label>
           <input id="cpCustomItem" placeholder="e.g. Wine fridge" data-i18n-ph="ph_cp_custom_item" oninput="if(this.value) document.getElementById('cpItem').value=''">
+          <label data-i18n="cp_purchase_by">Purchase by</label>
+          <select id="cpPurchaseBy">
+            <option value="kwood" data-i18n="cp_purchase_kwood">Through K-Wood</option>
+            <option value="client" data-i18n="cp_purchase_client">By client</option>
+          </select>
           <div class="grid3">
             <div>
               <label data-i18n="cp_decision_by">Decision to be made by</label>
@@ -2607,6 +2617,9 @@ const translations = {
   cp_deliver_to: { en: 'Deliver to', zh: '送貨地點' },
   cp_deliver_site: { en: 'Site', zh: '工地' },
   cp_deliver_kwood: { en: 'K-Wood', zh: 'K-Wood' },
+  cp_purchase_by: { en: 'Purchase by', zh: '採購方' },
+  cp_purchase_kwood: { en: 'Through K-Wood', zh: '由 K-Wood 採購' },
+  cp_purchase_client: { en: 'By client', zh: '由客戶自購' },
   pricing_appliances_hint: { en: 'Names only, no pricing — these drive the Category / Item dropdowns on the "Appliances/Customer purchase" page.', zh: '僅需名稱，無需定價 — 用於「電器／客戶自購」頁面的類別／項目下拉選單。' },
   nav_admin: { en: 'Admin', zh: '管理' },
   logout: { en: 'Log out', zh: '登出' },
@@ -3152,15 +3165,17 @@ function addCustomerPurchaseItem(){
   const decisionBy = tbcAwareValue('cpDecisionBy', 'cpDecisionByTBC');
   const deliverDate = tbcAwareValue('cpDeliverDate', 'cpDeliverDateTBC');
   const deliverTo = $('cpDeliverTo').value;
+  const purchaseBy = $('cpPurchaseBy').value;
   if (!category || !item){ showAlert(t('cp_pick_both')); return; }
 
-  customerPurchaseItems.push({ zone: zone || category, category, item, qty, notes, decisionBy, deliverDate, deliverTo });
+  customerPurchaseItems.push({ zone: zone || category, category, item, qty, notes, decisionBy, deliverDate, deliverTo, purchaseBy });
   $('cpNotes').value = '';
   $('cpQty').value = 1;
   $('cpCustomItem').value = '';
   setTbcAwareValue('cpDecisionBy', 'cpDecisionByTBC', '');
   setTbcAwareValue('cpDeliverDate', 'cpDeliverDateTBC', '');
   $('cpDeliverTo').value = 'site';
+  $('cpPurchaseBy').value = 'kwood';
   refreshZoneSuggestions();
   renderCustomerPurchaseList();
   renderQuote();
@@ -3203,6 +3218,7 @@ function openEditCpModal(idx){
   setTbcAwareValue('editCpDecisionBy', 'editCpDecisionByTBC', r.decisionBy || '');
   setTbcAwareValue('editCpDeliverDate', 'editCpDeliverDateTBC', r.deliverDate || '');
   $('editCpDeliverTo').value = r.deliverTo || 'site';
+  $('editCpPurchaseBy').value = r.purchaseBy || 'kwood';
   $('editCpNotes').value = r.notes || '';
   $('editCpModal').style.display = 'flex';
 }
@@ -3222,6 +3238,7 @@ $('editCpSaveBtn').addEventListener('click', () => {
   r.decisionBy = tbcAwareValue('editCpDecisionBy', 'editCpDecisionByTBC');
   r.deliverDate = tbcAwareValue('editCpDeliverDate', 'editCpDeliverDateTBC');
   r.deliverTo = $('editCpDeliverTo').value;
+  r.purchaseBy = $('editCpPurchaseBy').value;
   r.notes = $('editCpNotes').value.trim();
   $('editCpModal').style.display = 'none';
   refreshZoneSuggestions();
@@ -3238,6 +3255,9 @@ function cpFmtDate(s){
 }
 function cpDeliverToLabel(v){
   return v === 'kwood' ? t('cp_deliver_kwood') : t('cp_deliver_site');
+}
+function cpPurchaseByLabel(v){
+  return v === 'client' ? t('cp_purchase_client') : t('cp_purchase_kwood');
 }
 function renderCustomerPurchaseList(){
   const wrap = $('cpItemsList');
@@ -3260,6 +3280,7 @@ function renderCustomerPurchaseList(){
     ${byGroup[g].map(i => {
       const r = customerPurchaseItems[i];
       const details = [`${t('category')}: ${(r.category||'').replace(/</g,'&lt;')}`];
+      details.push(`${t('cp_purchase_by')}: ${cpPurchaseByLabel(r.purchaseBy)}`);
       if (r.decisionBy) details.push(`${t('cp_decision_by')}: ${cpFmtDate(r.decisionBy)}`);
       if (r.deliverDate) details.push(`${t('cp_deliver_date')}: ${cpFmtDate(r.deliverDate)}`);
       details.push(`${t('cp_deliver_to')}: ${cpDeliverToLabel(r.deliverTo)}`);
@@ -5853,10 +5874,12 @@ function renderQuote(){
       cpByZone[zone].push(r);
     });
     const cpDeliverLabel = v => v === 'kwood' ? 'K-Wood' : 'Site';
+    const cpPurchaseLabel = v => v === 'client' ? 'By client' : 'Through K-Wood';
     const cpRowHtml = r => `
       <tr class="item-tr">
         <td><div class="item-name">${(r.item||'').replace(/</g,'&lt;')}</div>${r.notes ? `<div class="item-sub">${r.notes.replace(/</g,'&lt;')}</div>` : ''}</td>
         <td class="num">${r.qty}</td>
+        <td>${cpPurchaseLabel(r.purchaseBy)}</td>
         <td>${r.decisionBy ? fmtDate(r.decisionBy) : '—'}</td>
         <td>${r.deliverDate ? fmtDate(r.deliverDate) : '—'}</td>
         <td>${cpDeliverLabel(r.deliverTo)}</td>
@@ -5864,9 +5887,9 @@ function renderQuote(){
     const cpTableBlocks = cpZoneOrder.map((zone, zi) => {
       const areaNum = String(zi + 1).padStart(2, '0');
       const thead = zi === 0
-        ? `<thead><tr><th>Item</th><th class="num">Qty</th><th>Decision by</th><th>Deliver date</th><th>Deliver to</th></tr></thead>`
+        ? `<thead><tr><th>Item</th><th class="num">Qty</th><th>Purchase by</th><th>Decision by</th><th>Deliver date</th><th>Deliver to</th></tr></thead>`
         : '';
-      return `<table class="doc-table">${thead}<tbody><tr class="grp-row"><td colspan="5">${areaNum} — ${zone.replace(/</g,'&lt;')}</td></tr>${cpByZone[zone].map(cpRowHtml).join('')}</tbody></table>`;
+      return `<table class="doc-table">${thead}<tbody><tr class="grp-row"><td colspan="6">${areaNum} — ${zone.replace(/</g,'&lt;')}</td></tr>${cpByZone[zone].map(cpRowHtml).join('')}</tbody></table>`;
     });
     const cpBlocks = [
       `<div class="render-page-title">Customer-purchased items</div>`,
