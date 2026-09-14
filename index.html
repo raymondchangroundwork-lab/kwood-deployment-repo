@@ -917,12 +917,10 @@
           <div>
             <label data-i18n="date_issued">Date issued</label>
             <input id="quoteDate" type="date" onchange="renderQuote()">
-            <label class="tbc-check"><input type="checkbox" id="quoteDateTBC"><span data-i18n="label_tbc">TBC</span></label>
           </div>
           <div>
             <label data-i18n="valid_until">Valid until</label>
             <input id="quoteValid" type="date" onchange="renderQuote()">
-            <label class="tbc-check"><input type="checkbox" id="quoteValidTBC"><span data-i18n="label_tbc">TBC</span></label>
           </div>
         </div>
         <div class="grid2">
@@ -2100,8 +2098,6 @@ function setTbcAwareValue(dateId, checkboxId, value){
   }
 }
 
-bindTbcCheckbox('quoteDate', 'quoteDateTBC');
-bindTbcCheckbox('quoteValid', 'quoteValidTBC');
 bindTbcCheckbox('expectedStartDate', 'expectedStartDateTBC');
 bindTbcCheckbox('cpDecisionBy', 'cpDecisionByTBC');
 bindTbcCheckbox('cpDeliverDate', 'cpDeliverDateTBC');
@@ -3515,9 +3511,8 @@ function buildQuoteRecord(){
   return {
     id: currentQuoteId || $('quoteNum').value.trim(),
     quoteNum: $('quoteNum').value.trim(),
-    quoteDate: $('quoteDate').value, // kept a clean ISO-date-or-empty value; TBC-ness lives in quoteDateTBC below
-    quoteDateTBC: $('quoteDateTBC').checked,
-    quoteValid: tbcAwareValue('quoteValid', 'quoteValidTBC'),
+    quoteDate: $('quoteDate').value,
+    quoteValid: $('quoteValid').value,
     salesperson: $('salesperson').value,
     createdBy: currentUser.username,
     createdByName: currentUser.name,
@@ -4094,7 +4089,7 @@ const rowHtml = (q, isVo) => {
       <td>${isVo ? '<span class="vo-indent">↳</span>' : ''}<span class="qnum-main">${q.quoteNum}</span></td>
       <td>${q.clientName || '—'}</td>
       <td>${q.clientAddress || '—'}</td>
-      <td>${q.quoteDateTBC ? t('label_tbc') : (q.quoteDate || '—')}</td>
+      <td>${q.quoteDate || '—'}</td>
       <td style="display:${isReviewer(currentUser.role) ? 'table-cell' : 'none'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(q.createdByName || q.createdBy || '').replace(/"/g,'&quot;')}">${q.createdByName || q.createdBy}</td>
       <td class="num">${money(q.grandTotal || 0)}</td>
       <td>
@@ -4175,7 +4170,7 @@ const rowHtml = (q, isVo) => {
       </div>
       <div class="qc-client">${q.clientName || '—'}</div>
       <div class="qc-row"><span>${t('th_address')}</span><span>${q.clientAddress || '—'}</span></div>
-      <div class="qc-row"><span>${t('th_date')}</span><span>${q.quoteDateTBC ? t('label_tbc') : (q.quoteDate || '—')}</span></div>
+      <div class="qc-row"><span>${t('th_date')}</span><span>${q.quoteDate || '—'}</span></div>
       ${isReviewer(currentUser.role) ? `<div class="qc-row"><span>${t('salesperson_label')}</span><span>${q.createdByName || q.createdBy}</span></div>` : ''}
       <div class="qc-row qc-total"><span>${t('th_total')}</span><span>${money(q.grandTotal || 0)}</span></div>
       <input class="remark-input" placeholder="${t('ph_remark')}"
@@ -4280,10 +4275,8 @@ async function openQuote(id){
   items = q.items || [];
   itemSeq = q.itemSeq || (items.length + 1);
   $('quoteNum').value = q.quoteNum || '';
-  $('quoteDateTBC').checked = !!q.quoteDateTBC;
-  $('quoteDate').disabled = !!q.quoteDateTBC;
   $('quoteDate').value = q.quoteDate || '';
-  setTbcAwareValue('quoteValid', 'quoteValidTBC', q.quoteValid || '');
+  $('quoteValid').value = q.quoteValid || '';
   $('salesperson').value = q.salesperson || currentUser.name;
   appointedSalesUsername = q.appointedSalesUsername || currentUser.username;
   await setupSalespersonField();
@@ -4350,8 +4343,8 @@ async function createVariationOrder(parentId){
   customerPurchaseItems = [];
   currentQuoteId = null;
   $('quoteNum').value = voNum;
-  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
-  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
+  $('quoteDate').value = todayISO(0);
+  $('quoteValid').value = todayISO(30);
   $('salesperson').value = currentUser.name || currentUser.username;
   appointedSalesUsername = parent.appointedSalesUsername || currentUser.username;
   setDocType('vo');
@@ -4503,8 +4496,8 @@ async function renderMonthlyReport(){
 
 /* ================= builder init (runs after login) ================= */
 async function initBuilder(){
-  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
-  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
+  $('quoteDate').value = todayISO(0);
+  $('quoteValid').value = todayISO(30);
   $('salesperson').value = currentUser.name || currentUser.username;
   await setupSalespersonField();
   $('quoteNum').value = generateDraftId();
@@ -5804,9 +5797,9 @@ function renderQuote(){
         <div class="label">Quotation</div>
         <div class="value">${$('quoteNum').value || '—'}</div>
         <div class="label" style="margin-top:10px;">Issued</div>
-        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteDateTBC').checked ? 'TBC' : $('quoteDate').value)}</div>
+        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteDate').value)}</div>
         <div class="label" style="margin-top:6px;">Valid until</div>
-        <div class="value" style="font-size:12.5px;">${fmtDate(tbcAwareValue('quoteValid', 'quoteValidTBC'))}</div>
+        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteValid').value)}</div>
       </div>
     </div>`;
 
@@ -6066,8 +6059,8 @@ async function resetQuote(silent){
   $('leadSource').value = 'Google Search';
   $('quoteNum').value = generateDraftId();
   currentDocStatus = 'draft';
-  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
-  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
+  $('quoteDate').value = todayISO(0);
+  $('quoteValid').value = todayISO(30);
   $('markupPct').value = 0;
   $('discountPct').value = 0;
   $('taxPct').value = 13;
