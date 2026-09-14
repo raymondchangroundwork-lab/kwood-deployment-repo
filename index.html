@@ -157,6 +157,9 @@
   .ct-toggle{ display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer; user-select:none; }
   .ct-toggle input{ width:auto; margin:0; }
   .ct-toggle span{ font-size:12.5px; font-weight:600; color:var(--walnut); }
+  .tbc-check{ display:flex; align-items:center; gap:5px; margin:4px 0 0; cursor:pointer; user-select:none; }
+  .tbc-check input{ width:auto; margin:0; }
+  .tbc-check span{ font-size:11px; font-weight:600; color:var(--oak); text-transform:uppercase; letter-spacing:0.3px; }
 
   /* items list */
   .items-list{ display:flex; flex-direction:column; gap:8px; margin-top:6px; }
@@ -770,10 +773,12 @@
       <div>
         <label data-i18n="cp_decision_by">Decision to be made by</label>
         <input id="editCpDecisionBy" type="date">
+        <label class="tbc-check"><input type="checkbox" id="editCpDecisionByTBC"><span data-i18n="label_tbc">TBC</span></label>
       </div>
       <div>
         <label data-i18n="cp_deliver_date">Deliver date</label>
         <input id="editCpDeliverDate" type="date">
+        <label class="tbc-check"><input type="checkbox" id="editCpDeliverDateTBC"><span data-i18n="label_tbc">TBC</span></label>
       </div>
       <div>
         <label data-i18n="cp_deliver_to">Deliver to</label>
@@ -912,10 +917,12 @@
           <div>
             <label data-i18n="date_issued">Date issued</label>
             <input id="quoteDate" type="date" onchange="renderQuote()">
+            <label class="tbc-check"><input type="checkbox" id="quoteDateTBC"><span data-i18n="label_tbc">TBC</span></label>
           </div>
           <div>
             <label data-i18n="valid_until">Valid until</label>
             <input id="quoteValid" type="date" onchange="renderQuote()">
+            <label class="tbc-check"><input type="checkbox" id="quoteValidTBC"><span data-i18n="label_tbc">TBC</span></label>
           </div>
         </div>
         <div class="grid2">
@@ -971,6 +978,7 @@
           <div>
             <label data-i18n="expected_start">Expected starting date</label>
             <input id="expectedStartDate" type="date" onchange="renderQuote()">
+            <label class="tbc-check"><input type="checkbox" id="expectedStartDateTBC"><span data-i18n="label_tbc">TBC</span></label>
           </div>
         </div>
       </div>
@@ -1136,10 +1144,12 @@
             <div>
               <label data-i18n="cp_decision_by">Decision to be made by</label>
               <input id="cpDecisionBy" type="date">
+              <label class="tbc-check"><input type="checkbox" id="cpDecisionByTBC"><span data-i18n="label_tbc">TBC</span></label>
             </div>
             <div>
               <label data-i18n="cp_deliver_date">Deliver date</label>
               <input id="cpDeliverDate" type="date">
+              <label class="tbc-check"><input type="checkbox" id="cpDeliverDateTBC"><span data-i18n="label_tbc">TBC</span></label>
             </div>
             <div>
               <label data-i18n="cp_deliver_to">Deliver to</label>
@@ -2060,6 +2070,44 @@ function todayISO(offsetDays = 0){
   return d.toISOString().slice(0,10);
 }
 
+/* ================= "TBC" (to be confirmed) support for date fields =================
+   A native <input type="date"> can't hold non-date text, so "TBC" is tracked as a sibling
+   checkbox: checking it disables + clears the date input, and callers read/write the pair's
+   "effective value" (a real ISO date, or the literal string 'TBC') through these two helpers. */
+function bindTbcCheckbox(dateId, checkboxId){
+  const cb = $(checkboxId);
+  const dateInput = $(dateId);
+  cb.addEventListener('change', () => {
+    dateInput.disabled = cb.checked;
+    if (cb.checked) dateInput.value = '';
+    if (typeof renderQuote === 'function' && items && items.length) renderQuote();
+  });
+}
+function tbcAwareValue(dateId, checkboxId){
+  return $(checkboxId).checked ? 'TBC' : $(dateId).value;
+}
+function setTbcAwareValue(dateId, checkboxId, value){
+  const dateInput = $(dateId);
+  const cb = $(checkboxId);
+  if (value === 'TBC'){
+    cb.checked = true;
+    dateInput.disabled = true;
+    dateInput.value = '';
+  } else {
+    cb.checked = false;
+    dateInput.disabled = false;
+    dateInput.value = value || '';
+  }
+}
+
+bindTbcCheckbox('quoteDate', 'quoteDateTBC');
+bindTbcCheckbox('quoteValid', 'quoteValidTBC');
+bindTbcCheckbox('expectedStartDate', 'expectedStartDateTBC');
+bindTbcCheckbox('cpDecisionBy', 'cpDecisionByTBC');
+bindTbcCheckbox('cpDeliverDate', 'cpDeliverDateTBC');
+bindTbcCheckbox('editCpDecisionBy', 'editCpDecisionByTBC');
+bindTbcCheckbox('editCpDeliverDate', 'editCpDeliverDateTBC');
+
 function refreshZoneSuggestions(){
   const cabinetZones = items.filter(i => i.sortBucket === 0).map(i => i.group);
   const cpZones = customerPurchaseItems.map(r => r.zone).filter(Boolean);
@@ -2606,6 +2654,7 @@ const translations = {
   client_phone: { en: "Client phone", zh: "客戶電話" },
   countertop_material: { en: "Countertop material", zh: "檯面材質" },
   date_issued: { en: "Date issued", zh: "發出日期" },
+  label_tbc: { en: "TBC", zh: "待定" },
   deduction_label: { en: "Deduction — openings that don't need cabinet material", zh: "扣減 — 不需櫃體的開口" },
   description: { en: "Description", zh: "描述" },
   details: { en: "Details", zh: "詳情" },
@@ -3104,8 +3153,8 @@ function addCustomerPurchaseItem(){
   const item = customItem || $('cpItem').value;
   const qty = parseFloat($('cpQty').value) || 1;
   const notes = $('cpNotes').value.trim();
-  const decisionBy = $('cpDecisionBy').value;
-  const deliverDate = $('cpDeliverDate').value;
+  const decisionBy = tbcAwareValue('cpDecisionBy', 'cpDecisionByTBC');
+  const deliverDate = tbcAwareValue('cpDeliverDate', 'cpDeliverDateTBC');
   const deliverTo = $('cpDeliverTo').value;
   if (!category || !item){ showAlert(t('cp_pick_both')); return; }
 
@@ -3113,8 +3162,8 @@ function addCustomerPurchaseItem(){
   $('cpNotes').value = '';
   $('cpQty').value = 1;
   $('cpCustomItem').value = '';
-  $('cpDecisionBy').value = '';
-  $('cpDeliverDate').value = '';
+  setTbcAwareValue('cpDecisionBy', 'cpDecisionByTBC', '');
+  setTbcAwareValue('cpDeliverDate', 'cpDeliverDateTBC', '');
   $('cpDeliverTo').value = 'site';
   refreshZoneSuggestions();
   renderCustomerPurchaseList();
@@ -3155,8 +3204,8 @@ function openEditCpModal(idx){
   }
   $('editCpZone').value = r.zone || '';
   $('editCpQty').value = r.qty;
-  $('editCpDecisionBy').value = r.decisionBy || '';
-  $('editCpDeliverDate').value = r.deliverDate || '';
+  setTbcAwareValue('editCpDecisionBy', 'editCpDecisionByTBC', r.decisionBy || '');
+  setTbcAwareValue('editCpDeliverDate', 'editCpDeliverDateTBC', r.deliverDate || '');
   $('editCpDeliverTo').value = r.deliverTo || 'site';
   $('editCpNotes').value = r.notes || '';
   $('editCpModal').style.display = 'flex';
@@ -3174,8 +3223,8 @@ $('editCpSaveBtn').addEventListener('click', () => {
   r.category = category;
   r.item = item;
   r.qty = parseFloat($('editCpQty').value) || 1;
-  r.decisionBy = $('editCpDecisionBy').value;
-  r.deliverDate = $('editCpDeliverDate').value;
+  r.decisionBy = tbcAwareValue('editCpDecisionBy', 'editCpDecisionByTBC');
+  r.deliverDate = tbcAwareValue('editCpDeliverDate', 'editCpDeliverDateTBC');
   r.deliverTo = $('editCpDeliverTo').value;
   r.notes = $('editCpNotes').value.trim();
   $('editCpModal').style.display = 'none';
@@ -3185,6 +3234,7 @@ $('editCpSaveBtn').addEventListener('click', () => {
 });
 
 function cpFmtDate(s){
+  if (s === 'TBC') return t('label_tbc');
   if (!s) return '';
   const d = new Date(s + 'T00:00:00');
   if (isNaN(d)) return '';
@@ -3465,8 +3515,9 @@ function buildQuoteRecord(){
   return {
     id: currentQuoteId || $('quoteNum').value.trim(),
     quoteNum: $('quoteNum').value.trim(),
-    quoteDate: $('quoteDate').value,
-    quoteValid: $('quoteValid').value,
+    quoteDate: $('quoteDate').value, // kept a clean ISO-date-or-empty value; TBC-ness lives in quoteDateTBC below
+    quoteDateTBC: $('quoteDateTBC').checked,
+    quoteValid: tbcAwareValue('quoteValid', 'quoteValidTBC'),
     salesperson: $('salesperson').value,
     createdBy: currentUser.username,
     createdByName: currentUser.name,
@@ -3482,7 +3533,7 @@ function buildQuoteRecord(){
     roundDirection: roundDirection,
     roundIncrement: $('roundIncrement').value,
     voDirection: voDirection,
-    expectedStartDate: $('expectedStartDate').value,
+    expectedStartDate: tbcAwareValue('expectedStartDate', 'expectedStartDateTBC'),
     items: items,
     itemSeq: itemSeq,
     customerPurchaseItems: customerPurchaseItems,
@@ -4043,7 +4094,7 @@ const rowHtml = (q, isVo) => {
       <td>${isVo ? '<span class="vo-indent">↳</span>' : ''}<span class="qnum-main">${q.quoteNum}</span></td>
       <td>${q.clientName || '—'}</td>
       <td>${q.clientAddress || '—'}</td>
-      <td>${q.quoteDate || '—'}</td>
+      <td>${q.quoteDateTBC ? t('label_tbc') : (q.quoteDate || '—')}</td>
       <td style="display:${isReviewer(currentUser.role) ? 'table-cell' : 'none'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(q.createdByName || q.createdBy || '').replace(/"/g,'&quot;')}">${q.createdByName || q.createdBy}</td>
       <td class="num">${money(q.grandTotal || 0)}</td>
       <td>
@@ -4124,7 +4175,7 @@ const rowHtml = (q, isVo) => {
       </div>
       <div class="qc-client">${q.clientName || '—'}</div>
       <div class="qc-row"><span>${t('th_address')}</span><span>${q.clientAddress || '—'}</span></div>
-      <div class="qc-row"><span>${t('th_date')}</span><span>${q.quoteDate || '—'}</span></div>
+      <div class="qc-row"><span>${t('th_date')}</span><span>${q.quoteDateTBC ? t('label_tbc') : (q.quoteDate || '—')}</span></div>
       ${isReviewer(currentUser.role) ? `<div class="qc-row"><span>${t('salesperson_label')}</span><span>${q.createdByName || q.createdBy}</span></div>` : ''}
       <div class="qc-row qc-total"><span>${t('th_total')}</span><span>${money(q.grandTotal || 0)}</span></div>
       <input class="remark-input" placeholder="${t('ph_remark')}"
@@ -4229,8 +4280,10 @@ async function openQuote(id){
   items = q.items || [];
   itemSeq = q.itemSeq || (items.length + 1);
   $('quoteNum').value = q.quoteNum || '';
+  $('quoteDateTBC').checked = !!q.quoteDateTBC;
+  $('quoteDate').disabled = !!q.quoteDateTBC;
   $('quoteDate').value = q.quoteDate || '';
-  $('quoteValid').value = q.quoteValid || '';
+  setTbcAwareValue('quoteValid', 'quoteValidTBC', q.quoteValid || '');
   $('salesperson').value = q.salesperson || currentUser.name;
   appointedSalesUsername = q.appointedSalesUsername || currentUser.username;
   await setupSalespersonField();
@@ -4248,7 +4301,7 @@ async function openQuote(id){
   $('roundIncrement').value = q.roundIncrement || '100';
   setRoundDirection(q.roundDirection || 'none');
   renderProjectImagesList();
-  $('expectedStartDate').value = q.expectedStartDate || '';
+  setTbcAwareValue('expectedStartDate', 'expectedStartDateTBC', q.expectedStartDate || '');
   $('markupPct').value = q.markupPct || 0;
   $('discountPct').value = q.discountPct || 0;
   $('taxPct').value = q.taxPct != null ? q.taxPct : 13;
@@ -4297,8 +4350,8 @@ async function createVariationOrder(parentId){
   customerPurchaseItems = [];
   currentQuoteId = null;
   $('quoteNum').value = voNum;
-  $('quoteDate').value = todayISO(0);
-  $('quoteValid').value = todayISO(30);
+  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
+  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
   $('salesperson').value = currentUser.name || currentUser.username;
   appointedSalesUsername = parent.appointedSalesUsername || currentUser.username;
   setDocType('vo');
@@ -4380,7 +4433,7 @@ async function submitClientInput(){
   $('clientEmail').value = info.email;
   $('clientAddress').value = info.address;
   $('unitType').value = info.unitType;
-  $('expectedStartDate').value = info.startDate;
+  setTbcAwareValue('expectedStartDate', 'expectedStartDateTBC', info.startDate);
   $('leadSource').value = info.leadSource;
   renderQuote();
   await saveQuote(true);
@@ -4450,8 +4503,8 @@ async function renderMonthlyReport(){
 
 /* ================= builder init (runs after login) ================= */
 async function initBuilder(){
-  $('quoteDate').value = todayISO(0);
-  $('quoteValid').value = todayISO(30);
+  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
+  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
   $('salesperson').value = currentUser.name || currentUser.username;
   await setupSalespersonField();
   $('quoteNum').value = generateDraftId();
@@ -5666,7 +5719,7 @@ function renderQuote(){
     roundingAdjustment = grandTotal - rawGrandTotal;
   }
 
-  const fmtDate = s => { if(!s) return '—'; const d = new Date(s+'T00:00:00'); return d.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}); };
+  const fmtDate = s => { if (s === 'TBC') return t('label_tbc'); if(!s) return '—'; const d = new Date(s+'T00:00:00'); return d.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}); };
 
   // stable sort by category/zone for both the cover lump-sum list and the itemized table
   const sorted = [...items].sort((a,b)=> (a.sortBucket ?? 5) - (b.sortBucket ?? 5));
@@ -5751,9 +5804,9 @@ function renderQuote(){
         <div class="label">Quotation</div>
         <div class="value">${$('quoteNum').value || '—'}</div>
         <div class="label" style="margin-top:10px;">Issued</div>
-        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteDate').value)}</div>
+        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteDateTBC').checked ? 'TBC' : $('quoteDate').value)}</div>
         <div class="label" style="margin-top:6px;">Valid until</div>
-        <div class="value" style="font-size:12.5px;">${fmtDate($('quoteValid').value)}</div>
+        <div class="value" style="font-size:12.5px;">${fmtDate(tbcAwareValue('quoteValid', 'quoteValidTBC'))}</div>
       </div>
     </div>`;
 
@@ -6007,14 +6060,14 @@ async function resetQuote(silent){
   $('roundIncrement').value = '100';
   setRoundDirection('none');
   renderProjectImagesList();
-  $('expectedStartDate').value = '';
+  setTbcAwareValue('expectedStartDate', 'expectedStartDateTBC', '');
   $('salesperson').value = currentUser.name || currentUser.username;
   await setupSalespersonField();
   $('leadSource').value = 'Google Search';
   $('quoteNum').value = generateDraftId();
   currentDocStatus = 'draft';
-  $('quoteDate').value = todayISO(0);
-  $('quoteValid').value = todayISO(30);
+  setTbcAwareValue('quoteDate', 'quoteDateTBC', todayISO(0));
+  setTbcAwareValue('quoteValid', 'quoteValidTBC', todayISO(30));
   $('markupPct').value = 0;
   $('discountPct').value = 0;
   $('taxPct').value = 13;
